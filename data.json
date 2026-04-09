@@ -22,8 +22,8 @@
     "link": "https://zalo.me/0858888715"
   },
   "services": [
-    { "id": 1, "title": "Dán Phim Cách Nhiệt", "icon": "shield-check", "desc": "Ô tô & Nhà kính chuyên nghiệp", "size": "large", "color": "bg-blue-500", "url": "#" },
-    { "id": 4, "title": "Dán Phim Nhà Kính", "icon": "home", "desc": "Chống nóng căn hộ hướng Tây", "size": "large", "color": "bg-emerald-600", "url": "#" },
+    { "id": 1, "title": "Dán Phim Cách Nhiệt Ô Tô", "icon": "shield-check", "desc": "Chống tia UV, chống nóng, không gian riêng tư", "size": "large", "color": "bg-blue-500", "url": "#" },
+    { "id": 4, "title": "Dán Phim Cách Nhiệt Nhà Kính", "icon": "home", "desc": "Chống nóng, không gian riêng tư căn hộ hướng Tây", "size": "large", "color": "bg-emerald-600", "url": "#" },
     { "id": 2, "title": "Detailing", "icon": "car", "desc": "Dọn xe 5 Sao", "size": "small", "color": "bg-red-500", "url": "https://vt.tiktok.com/ZSH5MQgH3/" },
     { "id": 3, "title": "Edit Video", "icon": "play", "desc": "Clip triệu view", "size": "small", "color": "bg-purple-500", "url": "https://vt.tiktok.com/ZSH5M7j5V/" }
   ],
