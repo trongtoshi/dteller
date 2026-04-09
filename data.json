@@ -17,7 +17,7 @@
     "price": "9.500.000đ",
     "oldPrice": "10.300.000đ",
     "gift": "TẶNG: VỆ SINH KHOANG MÁY + GIÀN NÓNG (TRỊ GIÁ 1.200.000Đ)",
-    "badge": "CHỈ CÒN 10 SUẤT TRONG THÁNG 04",
+    "badge": "CHỈ CÒN 10 SUẤT",
     "link": "https://zalo.me/0858888715"
   },
   "services": [
@@ -39,6 +39,6 @@
       { "id": "detail", "name": "Detailing toàn diện", "type": "car", "base": 1800000 },
       { "id": "video_edit", "name": "Edit Video (Theo source)", "type": "video", "base": 500000 }
     ],
-    "promos": { "DTELLER": 0.3, "VF5MN": 0.15 }
+    "promos": { "DTELLER": 0.2, "VF5MN": 0.15 }
   }
 }
