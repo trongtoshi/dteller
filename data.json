@@ -3,7 +3,7 @@
     "name": "D TELLER",
     "username": "@trongtoshi7",
     "title": "Solution Expert",
-    "bio": "11 năm kinh nghiệm dịch vụ cao cấp. Chuyên gia giải pháp xe & Content Creator.",
+    "bio": "11 năm kinh nghiệm dịch vụ cao cấp. Chuyên gia giải pháp xe & film cách nhiệt nhà kính.",
     "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=dteller",
     "zalo": "https://zalo.me/0858888715",
     "phone": "0858888715"
@@ -13,11 +13,11 @@
     { "id": "fb", "url": "https://www.facebook.com/share/1E2jy5hxj8/?mibextid=wwXIfr", "color": "bg-[#1877F2]" }
   ],
   "hotDeal": {
-    "title": "COMBO VF5 TRƯỚC MÙA DU LỊCH",
+    "title": "COMBO VF5 TRƯỚC MÙA DU LỊCH: Bộ thanh Dampers & Phuộc sau nâng cấp",
     "price": "9.500.000đ",
     "oldPrice": "10.300.000đ",
     "gift": "TẶNG: VỆ SINH KHOANG MÁY + GIÀN NÓNG (TRỊ GIÁ 1.200.000Đ)",
-    "badge": "CHỈ CÒN 10 SUẤT",
+    "badge": "CHỈ CÒN 10 SUẤT TRONG THÁNG 04",
     "link": "https://zalo.me/0858888715"
   },
   "services": [
@@ -39,6 +39,6 @@
       { "id": "detail", "name": "Detailing toàn diện", "type": "car", "base": 1800000 },
       { "id": "video_edit", "name": "Edit Video (Theo source)", "type": "video", "base": 500000 }
     ],
-    "promos": { "DTELLER": 0.1, "VF5": 0.15 }
+    "promos": { "DTELLER": 0.3, "VF5MN": 0.15 }
   }
 }
