@@ -21,19 +21,19 @@
     "link": "https://zalo.me/0858888715"
   },
   "services": [
-    { "id": 1, "title": "Dán Phim Cách Nhiệt", "icon": "shield-check", "desc": "Ô tô & Nhà kính", "size": "large", "color": "bg-blue-500", "url": "#" },
+    { "id": 1, "title": "Dán Phim Cách Nhiệt", "icon": "shield-check", "desc": "Ô tô & Nhà kính chuyên nghiệp", "size": "large", "color": "bg-blue-500", "url": "#" },
+    { "id": 4, "title": "Dán Phim Nhà Kính", "icon": "home", "desc": "Chống nóng căn hộ hướng Tây", "size": "large", "color": "bg-emerald-600", "url": "#" },
     { "id": 2, "title": "Detailing", "icon": "car", "desc": "Dọn xe 5 Sao", "size": "small", "color": "bg-red-500", "url": "https://vt.tiktok.com/ZSH5MQgH3/" },
-    { "id": 3, "title": "Edit Video", "icon": "play", "desc": "Clip triệu view", "size": "small", "color": "bg-purple-500", "url": "https://vt.tiktok.com/ZSH5M7j5V/" },
-    { "id": 4, "title": "Dán Phim Nhà Kính", "icon": "home", "desc": "Chống nóng căn hộ", "size": "large", "color": "bg-emerald-600", "url": "#" }
+    { "id": 3, "title": "Edit Video", "icon": "play", "desc": "Clip triệu view", "size": "small", "color": "bg-purple-500", "url": "https://vt.tiktok.com/ZSH5M7j5V/" }
   ],
   "pricing": {
     "carSizes": [
-      { "id": "small", "name": "Hạng A/B (VF5, Vios, i10...)", "m": 1 },
-      { "id": "medium", "name": "Hạng C/D (Mazda 6, Camry...)", "m": 1.25 },
-      { "id": "large", "name": "SUV/Bán tải (Everest...)", "m": 1.5 }
+      { "id": "small", "name": "Sedan (VF5, Vios, i10...)", "m": 1 },
+      { "id": "medium", "name": "SUV (VF8, Everest...)", "m": 1.25 },
+      { "id": "large", "name": "MPV/Bán tải (Ranger...)", "m": 1.5 }
     ],
     "items": [
-      { "id": "tint_car", "name": "Dán phim cách nhiệt (Ô tô)", "type": "car", "base": 4500000 },
+      { "id": "tint_car", "name": "Dán phim cách nhiệt (Ô tô)", "type": "car", "base": 11400000 },
       { "id": "house_std", "name": "Phim nhà kính (Tiêu chuẩn)", "type": "house", "base": 350000 },
       { "id": "house_pre", "name": "Phim nhà kính (Cao cấp)", "type": "house", "base": 600000 },
       { "id": "detail", "name": "Detailing toàn diện", "type": "car", "base": 1800000 },
