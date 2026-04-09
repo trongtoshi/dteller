@@ -40,6 +40,6 @@
       { "id": "detail", "name": "Detailing toàn diện", "type": "car", "base": 1800000 },
       { "id": "video_edit", "name": "Edit Video (Theo source)", "type": "video", "base": 500000 }
     ],
-    "promos": { "DTELLER": 0.3, "VF5MN": 0.15 }
+    "promos": { "DTELLER": 0.3, "VF5MN": 0.15, "THANHNGO": 0.3 }
   }
 }
