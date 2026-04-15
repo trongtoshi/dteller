@@ -4,26 +4,26 @@
     "username": "@trongtoshi7",
     "title": "Solution Expert",
     "bio": "11 năm kinh nghiệm dịch vụ cao cấp. Chuyên gia giải pháp xe & film cách nhiệt nhà kính.",
-    "avatar": "logodteller.png",
+    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=dteller",
     "zalo": "https://zalo.me/0858888715",
     "phone": "0858888715"
   },
   "socials": [
     { "id": "tiktok", "url": "https://www.tiktok.com/@trongtoshi7?_r=1&_t=ZS-95LGRoZuBj6", "color": "bg-black" },
     { "id": "fb", "url": "https://www.facebook.com/share/1E2jy5hxj8/?mibextid=wwXIfr", "color": "bg-[#1877F2]" },
-    { "id": "shopping-bag", "url": "https://beacons.ai/trongtoshi", "color": "bg-[#EE4D2D]" }
+    { "id": "shopping-bag", "url": "https://beacons.ai/trongtoshi7", "color": "bg-[#EE4D2D]" }
   ],
   "hotDeal": {
-    "title": "COMBO VF5: BỘ 03 THANH DAMPERS + PHUỘC SAU NÂNG CẤP",
+    "title": "COMBO VF5 TRƯỚC MÙA DU LỊCH: Bộ thanh Dampers & Phuộc sau nâng cấp",
     "price": "9.500.000đ",
     "oldPrice": "10.300.000đ",
     "gift": "TẶNG: VỆ SINH KHOANG MÁY + GIÀN NÓNG (TRỊ GIÁ 1.200.000Đ)",
-    "badge": "CHỈ CÒN 10 SUẤT",
+    "badge": "CHỈ CÒN 10 SUẤT TRONG THÁNG 04",
     "link": "https://zalo.me/0858888715"
   },
   "services": [
-    { "id": 1, "title": "Dán Phim Cách Nhiệt Ô Tô", "icon": "shield-check", "desc": "Chống tia UV, chống nóng, không gian riêng tư", "size": "large", "color": "bg-blue-500", "url": "#" },
-    { "id": 4, "title": "Dán Phim Cách Nhiệt Nhà Kính", "icon": "home", "desc": "Chống nóng, không gian riêng tư căn hộ hướng Tây", "size": "large", "color": "bg-emerald-600", "url": "#" },
+    { "id": 1, "title": "Dán Phim Cách Nhiệt", "icon": "shield-check", "desc": "Ô tô & Nhà kính chuyên nghiệp", "size": "large", "color": "bg-blue-500", "url": "#" },
+    { "id": 4, "title": "Dán Phim Nhà Kính", "icon": "home", "desc": "Chống nóng căn hộ hướng Tây", "size": "large", "color": "bg-emerald-600", "url": "#" },
     { "id": 2, "title": "Detailing", "icon": "car", "desc": "Dọn xe 5 Sao", "size": "small", "color": "bg-red-500", "url": "https://vt.tiktok.com/ZSH5MQgH3/" },
     { "id": 3, "title": "Edit Video", "icon": "play", "desc": "Clip triệu view", "size": "small", "color": "bg-purple-500", "url": "https://vt.tiktok.com/ZSH5M7j5V/" }
   ],
@@ -31,7 +31,7 @@
     "carSizes": [
       { "id": "small", "name": "Hạng A/B (VF5, Vios, i10...)", "m": 1 },
       { "id": "medium", "name": "Hạng C/D (Mazda 6, Camry...)", "m": 1.25 },
-      { "id": "large", "name": "SUV/Bán tải (Limogreen, MPV 7, Everest...)", "m": 1.5 }
+      { "id": "large", "name": "SUV/Bán tải (Everest...)", "m": 1.5 }
     ],
     "items": [
       { "id": "tint_car", "name": "Dán phim cách nhiệt (Ô tô)", "type": "car", "base": 11400000 },
@@ -40,6 +40,6 @@
       { "id": "detail", "name": "Detailing toàn diện", "type": "car", "base": 1800000 },
       { "id": "video_edit", "name": "Edit Video (Theo source)", "type": "video", "base": 500000 }
     ],
-    "promos": { "DTELLER": 0.3, "VF5MN": 0.15, "THANHNGO": 0.3 }
+    "promos": { "DTELLER": 0.3, "VF5MN": 0.15 }
   }
 }
