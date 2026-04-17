@@ -40,7 +40,7 @@
       { "id": "detail", "name": "Detailing toàn diện", "type": "car", "base": 1800000 },
       { "id": "video_edit", "name": "Edit Video (Theo source)", "type": "video", "base": 500000 }
     ],
-    "promos": { "DTELLER": 0.3, "VF5MN": 0.15 }
+    "promos": { "DTELLER": 0.2, "VF5MN": 0.15, "CTVF5MN": 0.3 }
   },
   "firebaseConfig": {
     "apiKey": "AIzaSyAkjO_o_sZUnqHK8ejJipeKNxwazWTv4Cw",
