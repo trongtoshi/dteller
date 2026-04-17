@@ -20,6 +20,15 @@
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .pulse-red { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .receipt-cutout {
+            position: relative;
+        }
+        .receipt-cutout::before, .receipt-cutout::after {
+            content: ''; position: absolute; top: 50%; width: 24px; height: 24px; 
+            background-color: #f8fafc; border-radius: 50%; transform: translateY(-50%);
+        }
+        .receipt-cutout::before { left: -12px; }
+        .receipt-cutout::after { right: -12px; }
     </style>
 </head>
 <body>
@@ -38,29 +47,26 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useRef } = React;
 
-        // Vỏ bọc bọc thép cho Icon (Chống sập React)
         const Icon = ({ name, size = 20, className = "" }) => {
             const containerRef = useRef(null);
-
             useEffect(() => {
                 if (window.lucide && containerRef.current) {
-                    containerRef.current.innerHTML = ''; // Dọn dẹp an toàn
+                    containerRef.current.innerHTML = ''; 
                     const i = document.createElement('i');
                     i.setAttribute('data-lucide', name);
                     if (className) i.className = className;
                     i.style.width = size + 'px';
                     i.style.height = size + 'px';
                     containerRef.current.appendChild(i);
-                    window.lucide.createIcons({ root: containerRef.current }); // Giới hạn khu vực render
+                    window.lucide.createIcons({ root: containerRef.current }); 
                 }
             }, [name, size, className]);
-
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
         const App = () => {
             const [data, setData] = useState(null);
-            const [view, setView] = useState('home'); 
+            const [view, setView] = useState('home'); // home, calc, booking, success, admin_calendar, admin_dashboard
             const [calc, setCalc] = useState({ size: 'small', item: 'tint_car', code: '', area: 1 });
             const [discount, setDiscount] = useState(0);
             
@@ -72,55 +78,40 @@
             // UI State
             const [selectedDate, setSelectedDate] = useState(null);
             const [bookingForm, setBookingForm] = useState({ name: '', phone: '', time: '09:00' });
+            const [recentBooking, setRecentBooking] = useState(null); // Lưu đơn vừa đặt để hiện Biên lai
             const [isAdmin, setIsAdmin] = useState(false);
             const [isPromoApplied, setIsPromoApplied] = useState(false);
             const [globalError, setGlobalError] = useState(null);
 
-            // 1. Tải Dữ Liệu & Khởi tạo Database
             useEffect(() => {
                 const loadSystem = async () => {
                     try {
                         const res = await fetch(`data.json?t=${Date.now()}`);
                         if (!res.ok) throw new Error("Không tìm thấy file data.json trên máy chủ.");
-                        
                         const text = await res.text();
-                        let json;
-                        try {
-                            json = JSON.parse(text);
-                        } catch(e) {
-                            throw new Error("File data.json bị sai cú pháp. Vui lòng kiểm tra lại các dấu ngoặc kép và dấu phẩy.");
-                        }
-                        
+                        let json = JSON.parse(text);
                         setData(json);
 
-                        // Khởi tạo Firebase an toàn
                         const fbConfig = json.firebaseConfig;
                         if (fbConfig && fbConfig.apiKey && fbConfig.apiKey.length > 10 && fbConfig.apiKey !== "ĐIỀN_API_KEY_CỦA_ÔNG_VÀO_ĐÂY" && window.FirebaseSDK) {
                             try {
                                 const { initializeApp, getFirestore, getAuth, signInAnonymously } = window.FirebaseSDK;
                                 const app = window._firebaseApp || initializeApp(fbConfig);
                                 window._firebaseApp = app;
-                                
                                 const firestore = getFirestore(app);
                                 const auth = getAuth(app);
                                 setDb(firestore);
                                 await signInAnonymously(auth);
-                            } catch(err) {
-                                console.error("Lỗi khởi tạo Firebase:", err);
-                            }
+                            } catch(err) { console.error("Lỗi khởi tạo Firebase:", err); }
                         }
-                    } catch (e) {
-                        setGlobalError(e.message);
-                    }
+                    } catch (e) { setGlobalError(e.message); }
                 };
                 loadSystem();
             }, []);
 
-            // 2. Lắng nghe lịch và đơn hàng thời gian thực
             useEffect(() => {
                 if (!db) return;
                 const { collection, onSnapshot, query } = window.FirebaseSDK;
-                
                 try {
                     const unsubAvail = onSnapshot(query(collection(db, 'availability')), (snapshot) => {
                         const dict = {};
@@ -135,53 +126,52 @@
                     });
 
                     return () => { unsubAvail(); unsubBook(); };
-                } catch(e) {
-                    console.warn("Lỗi đọc Database:", e);
-                }
+                } catch(e) { console.warn("Lỗi đọc Database:", e); }
             }, [db]);
 
-            // [LOGIC TÍNH TOÁN DỰ TOÁN]
             const selectedItem = useMemo(() => data?.pricing.items.find(i => i.id === calc.item), [calc.item, data]);
             const finalPrice = useMemo(() => {
                 if (!selectedItem || !data) return 0;
-                let p = selectedItem.type === 'car' 
-                    ? selectedItem.base * (data.pricing.carSizes.find(i => i.id === calc.size)?.m || 1) 
-                    : selectedItem.base * (parseFloat(calc.area) || 0);
+                let p = selectedItem.type === 'car' ? selectedItem.base * (data.pricing.carSizes.find(i => i.id === calc.size)?.m || 1) : selectedItem.base * (parseFloat(calc.area) || 0);
                 return discount > 0 ? p * (1 - discount) : p;
             }, [calc, selectedItem, discount, data]);
             const formatVND = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
             const applyPromo = () => {
                 const promoValue = data?.pricing.promos[calc.code.toUpperCase().trim()];
-                if (promoValue) {
-                    setDiscount(promoValue);
-                    setIsPromoApplied(true);
-                } else {
-                    setDiscount(0);
-                    setIsPromoApplied(false);
-                }
+                if (promoValue) { setDiscount(promoValue); setIsPromoApplied(true); } 
+                else { setDiscount(0); setIsPromoApplied(false); }
             };
 
-            // [HÀNH ĐỘNG DATABASE]
+            // LOGIC AUTO-BOOKING MỚI
             const submitBooking = async (e) => {
                 e.preventDefault();
                 if (!db) {
                     alert("⚠️ Tính năng này đang offline. Vui lòng cấu hình firebaseConfig trong data.json để lưu đơn hàng.");
                     return;
                 }
-                const { collection, addDoc } = window.FirebaseSDK;
+                const { collection, addDoc, doc, setDoc } = window.FirebaseSDK;
                 try {
-                    await addDoc(collection(db, 'bookings'), {
+                    // 1. Lưu thông tin đơn hàng
+                    const bookingData = {
                         ...bookingForm,
                         date: selectedDate,
-                        service: selectedItem?.name || 'Dịch vụ lẻ',
+                        service: selectedItem?.name || 'Tư vấn giải pháp',
                         price: formatVND(finalPrice),
                         createdAt: new Date().toISOString()
-                    });
-                    setView('home');
+                    };
+                    await addDoc(collection(db, 'bookings'), bookingData);
+
+                    // 2. Auto-cập nhật lịch (Trống -> Vàng -> Đỏ)
+                    const currentStatus = availability[selectedDate]?.status || 'empty';
+                    const nextStatus = currentStatus === 'empty' ? 'half' : 'full';
+                    await setDoc(doc(db, 'availability', selectedDate), { status: nextStatus });
+
+                    // 3. Hiển thị Biên lai
+                    setRecentBooking(bookingData);
+                    setView('success');
                     setSelectedDate(null);
                     setBookingForm({ name: '', phone: '', time: '09:00' });
-                    alert("🎉 Đặt lịch thành công! Tôi sẽ liên hệ với ông ngay.");
                 } catch (e) { alert("Lỗi kết nối CSDL. Hãy kiểm tra lại Rule của Firestore."); }
             };
 
@@ -199,7 +189,6 @@
                 await deleteDoc(doc(db, 'bookings', id));
             };
 
-            // --- KIỂM TRA LỖI ---
             if (globalError) {
                 return (
                     <div className="min-h-screen bg-slate-100 p-8 flex flex-col items-center justify-center text-center">
@@ -210,18 +199,16 @@
                 );
             }
 
-            if (!data) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-black animate-pulse uppercase tracking-widest text-xl">Đang tải cấu hình...</div>;
+            if (!data) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-black animate-pulse uppercase tracking-widest text-xl">Đang tải hệ thống...</div>;
 
-            // RENDER LỊCH CHUYÊN NGHIỆP CÓ NGÀY CUỐI TUẦN
             const renderCalendar = () => {
                 const days = [];
                 const now = new Date();
                 const year = now.getFullYear();
                 const month = now.getMonth();
-                
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 const firstDay = new Date(year, month, 1).getDay(); 
-                const emptyCells = firstDay === 0 ? 6 : firstDay - 1; // Căn Thứ 2 đầu tiên
+                const emptyCells = firstDay === 0 ? 6 : firstDay - 1; 
 
                 const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
                 const headers = weekDays.map((d, i) => (
@@ -268,7 +255,7 @@
             };
 
             return (
-                <div className="max-w-md mx-auto min-h-screen px-4 pt-8 pb-32 animate-in">
+                <div className="max-w-md mx-auto min-h-screen px-4 pt-8 pb-32 animate-in relative">
                     
                     <header className="flex flex-col items-center mb-10 text-center">
                         <div className="relative mb-6 group">
@@ -278,10 +265,10 @@
                             </div>
                             <div className="absolute bottom-1 right-1 bg-green-500 w-5 h-5 rounded-full border-4 border-white shadow-sm"></div>
                         </div>
-                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                        <h1 onClick={() => { window._clickCount = (window._clickCount || 0) + 1; if(window._clickCount >= 5) { setIsAdmin(true); setView('admin_dashboard'); window._clickCount = 0; }}} className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 select-none">
                             {data.profile.name} <Icon name="check-circle" size={18} className="text-blue-500 fill-blue-500/10" />
                         </h1>
-                        <p onClick={() => { window._clickCount = (window._clickCount || 0) + 1; if(window._clickCount >= 5) { setIsAdmin(true); setView('admin_dashboard'); window._clickCount = 0; }}} className="text-blue-600 font-bold text-[10px] uppercase tracking-[0.2em] mt-1 select-none">
+                        <p className="text-blue-600 font-bold text-[10px] uppercase tracking-[0.2em] mt-1 select-none">
                             {isAdmin ? '🔴 ADMIN QUẢN LÝ ĐƠN' : data.profile.title}
                         </p>
                         <p className="text-slate-500 text-sm max-w-[300px] leading-relaxed font-medium italic mt-3">"{data.profile.bio}"</p>
@@ -348,6 +335,7 @@
                         </div>
                     )}
 
+                    {/* MÀN HÌNH ĐẶT LỊCH */}
                     {(view === 'booking' || view === 'admin_calendar') && (
                         <div className="animate-in space-y-6">
                             <div className="bg-white rounded-[2.5rem] p-6 shadow-2xl border border-slate-50">
@@ -363,7 +351,7 @@
                                         <input required placeholder="Họ và tên khách hàng" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.name} onChange={e => setBookingForm({...bookingForm, name: e.target.value})} />
                                         <input required type="tel" placeholder="Số điện thoại liên hệ" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} />
                                         <div className="flex gap-2">
-                                            <input type="time" className="flex-1 bg-slate-50 p-4.5 rounded-2xl text-sm font-bold ring-1 ring-slate-100" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} />
+                                            <input type="time" required className="flex-1 bg-slate-50 p-4.5 rounded-2xl text-sm font-bold ring-1 ring-slate-100" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} />
                                             <button type="submit" className="flex-[2] bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-xl shadow-blue-200">Xác nhận lịch</button>
                                         </div>
                                     </form>
@@ -372,6 +360,7 @@
                         </div>
                     )}
 
+                    {/* MÀN HÌNH TÍNH GIÁ */}
                     {view === 'calc' && (
                         <div className="bg-white rounded-[2.5rem] p-7 shadow-2xl animate-in space-y-6">
                             <div className="flex justify-between items-center mb-2"><h3 className="font-black uppercase tracking-widest text-xs">Dự toán chi phí</h3><button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={16}/></button></div>
@@ -409,6 +398,50 @@
                         </div>
                     )}
 
+                    {/* BIÊN LAI XÁC NHẬN (MÀN HÌNH MỚI DÀNH CHO KHÁCH) */}
+                    {view === 'success' && recentBooking && (
+                        <div className="animate-in">
+                            <div className="bg-white rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden">
+                                <div className="bg-green-500 p-8 text-center text-white">
+                                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+                                        <Icon name="check" size={32} />
+                                    </div>
+                                    <h2 className="text-2xl font-black tracking-tight mb-1">ĐẶT LỊCH THÀNH CÔNG</h2>
+                                    <p className="text-xs opacity-80 uppercase tracking-widest font-bold">Vui lòng chụp màn hình lại</p>
+                                </div>
+                                
+                                <div className="receipt-cutout border-t-2 border-dashed border-slate-200"></div>
+                                
+                                <div className="p-8 space-y-6">
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Khách hàng</p><p className="font-black text-lg text-slate-800">{recentBooking.name}</p></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ngày hẹn</p><p className="font-black text-slate-800">{recentBooking.date}</p></div>
+                                        <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Giờ</p><p className="font-black text-slate-800">{recentBooking.time}</p></div>
+                                    </div>
+                                    <div className="bg-slate-50 p-4 rounded-2xl">
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Dịch vụ</p>
+                                        <p className="font-black text-blue-600">{recentBooking.service}</p>
+                                        <div className="h-px bg-slate-200 my-3"></div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Dự toán</span>
+                                            <span className="font-black text-lg">{recentBooking.price}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-3 pt-4">
+                                        <a href={data.profile.zalo} target="_blank" className="w-full bg-[#0068FF] text-white py-4.5 rounded-2xl font-black text-[11px] uppercase tracking-widest flex justify-center items-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-200">
+                                            <Icon name="send" size={16} /> Gửi chốt qua Zalo
+                                        </a>
+                                        <button onClick={() => setView('home')} className="w-full bg-slate-100 text-slate-600 py-4.5 rounded-2xl font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all">
+                                            Về trang chủ
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MÀN HÌNH QUẢN LÝ ĐƠN HÀNG CỦA ADMIN */}
                     {view === 'admin_dashboard' && (
                         <div className="animate-in space-y-4">
                             <div className="flex justify-between items-center mb-6 px-1">
@@ -432,14 +465,16 @@
                         </div>
                     )}
 
-                    <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md flex gap-3 z-50">
-                        <button type="button" onClick={() => setView('booking')} className="flex-[2.5] bg-blue-600 text-white rounded-[1.8rem] flex items-center justify-center gap-3 shadow-2xl py-4.5 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-blue-300">
-                            <Icon name="calendar" size={18} /> Đặt lịch thi công
-                        </button>
-                        <a href={`tel:${data.profile.phone}`} className="bg-white text-slate-900 border border-slate-200 rounded-[1.8rem] px-5 flex items-center justify-center shadow-xl active:scale-95 transition-all">
-                            <Icon name="phone-call" size={20} />
-                        </a>
-                    </footer>
+                    {view !== 'success' && (
+                        <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md flex gap-3 z-50">
+                            <button type="button" onClick={() => setView('booking')} className="flex-[2.5] bg-blue-600 text-white rounded-[1.8rem] flex items-center justify-center gap-3 shadow-2xl py-4.5 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-blue-300">
+                                <Icon name="calendar" size={18} /> Đặt lịch thi công
+                            </button>
+                            <a href={`tel:${data.profile.phone}`} className="bg-white text-slate-900 border border-slate-200 rounded-[1.8rem] px-5 flex items-center justify-center shadow-xl active:scale-95 transition-all">
+                                <Icon name="phone-call" size={20} />
+                            </a>
+                        </footer>
+                    )}
                 </div>
             );
         };
