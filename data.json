@@ -43,11 +43,11 @@
     "promos": { "DTELLER": 0.3, "VF5MN": 0.15 }
   },
   "firebaseConfig": {
-    "apiKey": "",
-    "authDomain": "",
-    "projectId": "",
-    "storageBucket": "",
-    "messagingSenderId": "",
-    "appId": ""
+    "apiKey": "AIzaSyAkjO_o_sZUnqHK8ejJipeKNxwazWTv4Cw",
+    "authDomain": "dteller-e07c1.firebaseapp.com",
+    "projectId": "dteller-e07c1",
+    "storageBucket": "dteller-e07c1.firebasestorage.app",
+    "messagingSenderId": "34108264809",
+    "appId": "1:34108264809:web:6a5dcc5a6cbf852a46edf8"
   }
 }
