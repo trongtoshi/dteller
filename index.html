@@ -275,9 +275,19 @@
                     const oldDate = originalBooking?.date;
                     const newDate = editModal.date;
 
-                    let newRaw = editModal.rawPrice;
-                    const parsed = Number(String(editModal.price).replace(/[^\d]/g, ''));
-                    if (!isNaN(parsed)) newRaw = parsed;
+                    // CẢNH BÁO NẾU ĐỔI SANG NGÀY KÍN LỊCH
+                    if (oldDate !== newDate && availability[newDate]?.status === 'full') {
+                        if (!window.confirm(`⚠️ Ngày ${newDate} hiện đã KÍN LỊCH.\nBạn có chắc chắn muốn chèn thêm đơn vào ngày này không?`)) {
+                            return; // Dừng lại nếu không đồng ý
+                        }
+                    }
+
+                    let newRaw = originalBooking.rawPrice || 0;
+                    const parsed = Number(String(editModal.price).replace(/\D/g, ''));
+                    if (!isNaN(parsed) && parsed > 0) newRaw = parsed;
+
+                    // Định dạng lại giá tiền chuẩn có ₫ để lưu vào Database
+                    const formattedPrice = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(newRaw);
 
                     // 1. Cập nhật thông tin đơn hàng
                     await updateDoc(doc(db, 'bookings', editModal.id), {
@@ -286,7 +296,7 @@
                         date: editModal.date,
                         time: editModal.time,
                         service: editModal.service,
-                        price: editModal.price,
+                        price: formattedPrice,
                         rawPrice: newRaw
                     });
 
@@ -570,7 +580,7 @@
                                                 <p className="text-blue-600 font-bold text-xs uppercase tracking-widest">{b.phone}</p>
                                             </div>
                                             <div className="flex gap-1">
-                                                <button onClick={() => setEditModal(b)} className="p-2 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-xl transition-colors"><Icon name="edit" size={18}/></button>
+                                                <button onClick={() => setEditModal({...b, price: b.price ? new Intl.NumberFormat('vi-VN').format(b.price.replace(/\D/g, '')) : ''})} className="p-2 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-xl transition-colors"><Icon name="edit" size={18}/></button>
                                                 <button onClick={() => deleteBooking(b.id)} className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 rounded-xl transition-colors"><Icon name="trash-2" size={18}/></button>
                                             </div>
                                         </div>
@@ -675,7 +685,11 @@
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase">Tên khách hàng</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.name} onChange={e => setEditModal({...editModal, name: e.target.value})} /></div>
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase">Số điện thoại</label><input required type="tel" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.phone} onChange={e => setEditModal({...editModal, phone: e.target.value})} /></div>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Ngày</label><input required type="date" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} /></div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase">Ngày</label>
+                                            <input required type="date" className={`w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border ${bookings.find(b => b.id === editModal.id)?.date !== editModal.date && availability[editModal.date]?.status === 'full' ? 'border-red-400 ring-1 ring-red-400 text-red-600' : 'border-slate-100'} mt-1 outline-none focus:ring-2 focus:ring-blue-500`} value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} />
+                                            {bookings.find(b => b.id === editModal.id)?.date !== editModal.date && availability[editModal.date]?.status === 'full' && <p className="text-red-500 text-[9px] font-black mt-1.5 uppercase tracking-widest leading-tight">⚠️ Ngày này đã kín lịch!</p>}
+                                        </div>
                                         <div><label className="text-[10px] font-black text-slate-400 uppercase">Giờ</label><input required type="time" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} /></div>
                                     </div>
                                     
@@ -696,21 +710,24 @@
 
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase">Giá Tiền (VND)</label>
-                                        <input 
-                                            required 
-                                            type="text" 
-                                            className="w-full bg-slate-50 p-3 rounded-xl text-sm font-black border border-slate-100 mt-1 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500" 
-                                            value={editModal.price} 
-                                            onChange={e => {
-                                                const rawVal = e.target.value.replace(/\D/g, '');
-                                                if (!rawVal) {
-                                                    setEditModal({...editModal, price: ''});
-                                                } else {
-                                                    const formatted = new Intl.NumberFormat('vi-VN').format(rawVal);
-                                                    setEditModal({...editModal, price: formatted + ' ₫'});
-                                                }
-                                            }} 
-                                        />
+                                        <div className="relative">
+                                            <input 
+                                                required 
+                                                type="text" 
+                                                className="w-full bg-slate-50 p-3 rounded-xl text-sm font-black border border-slate-100 mt-1 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 pr-8" 
+                                                value={editModal.price} 
+                                                onChange={e => {
+                                                    const rawVal = e.target.value.replace(/\D/g, '');
+                                                    if (!rawVal) {
+                                                        setEditModal({...editModal, price: ''});
+                                                    } else {
+                                                        const formatted = new Intl.NumberFormat('vi-VN').format(rawVal);
+                                                        setEditModal({...editModal, price: formatted});
+                                                    }
+                                                }} 
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-slate-400 mt-0.5">₫</span>
+                                        </div>
                                     </div>
                                 </div>
 
