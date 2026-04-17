@@ -72,9 +72,10 @@
             const [availability, setAvailability] = useState({});
             const [bookings, setBookings] = useState([]);
             
-            // TRẠNG THÁI BỘ LỌC TÌM KIẾM
+            // TRẠNG THÁI BỘ LỌC TÌM KIẾM & LỊCH XUYÊN THỜI GIAN
             const [searchTerm, setSearchTerm] = useState('');
-            const [filterPeriod, setFilterPeriod] = useState('all'); // all, week, month, last_month
+            const [filterPeriod, setFilterPeriod] = useState('all'); 
+            const [navDate, setNavDate] = useState(new Date()); // Biến điều hướng tháng cho Lịch
             
             const [selectedDate, setSelectedDate] = useState(null);
             const [bookingForm, setBookingForm] = useState({ name: '', phone: '', time: '09:00' });
@@ -82,6 +83,9 @@
             const [isAdmin, setIsAdmin] = useState(false);
             const [isPromoApplied, setIsPromoApplied] = useState(false);
             const [globalError, setGlobalError] = useState(null);
+
+            // TRẠNG THÁI MODAL CHỈNH SỬA ĐƠN HÀNG
+            const [editModal, setEditModal] = useState(null);
 
             useEffect(() => {
                 const loadSystem = async () => {
@@ -129,57 +133,29 @@
                 } catch(e) { console.warn("Lỗi đọc Database:", e); }
             }, [db]);
 
-            // XỬ LÝ LỌC DANH SÁCH THEO TÊN, SĐT & THỜI GIAN
             const filteredBookings = useMemo(() => {
                 let result = bookings;
-
-                // 1. Lọc theo Tên hoặc Số điện thoại
                 if (searchTerm.trim() !== '') {
                     const term = searchTerm.toLowerCase();
-                    result = result.filter(b => 
-                        (b.name && b.name.toLowerCase().includes(term)) || 
-                        (b.phone && b.phone.includes(term))
-                    );
+                    result = result.filter(b => (b.name && b.name.toLowerCase().includes(term)) || (b.phone && b.phone.includes(term)));
                 }
-
-                // 2. Lọc theo Thời gian (dựa trên ngày khách đặt lịch)
                 const now = new Date();
                 now.setHours(0, 0, 0, 0);
 
                 if (filterPeriod === 'week') {
                     const day = now.getDay() || 7;
-                    const start = new Date(now);
-                    start.setDate(now.getDate() - (day - 1));
-                    
-                    const end = new Date(start);
-                    end.setDate(end.getDate() + 6);
-                    end.setHours(23, 59, 59, 999);
-                    
-                    result = result.filter(b => {
-                        if (!b.date) return false;
-                        const d = new Date(b.date);
-                        return d >= start && d <= end;
-                    });
+                    const start = new Date(now); start.setDate(now.getDate() - (day - 1));
+                    const end = new Date(start); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999);
+                    result = result.filter(b => { if (!b.date) return false; const d = new Date(b.date); return d >= start && d <= end; });
                 } else if (filterPeriod === 'month') {
                     const start = new Date(now.getFullYear(), now.getMonth(), 1);
                     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-                    
-                    result = result.filter(b => {
-                        if (!b.date) return false;
-                        const d = new Date(b.date);
-                        return d >= start && d <= end;
-                    });
+                    result = result.filter(b => { if (!b.date) return false; const d = new Date(b.date); return d >= start && d <= end; });
                 } else if (filterPeriod === 'last_month') {
                     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
                     const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-                    
-                    result = result.filter(b => {
-                        if (!b.date) return false;
-                        const d = new Date(b.date);
-                        return d >= start && d <= end;
-                    });
+                    result = result.filter(b => { if (!b.date) return false; const d = new Date(b.date); return d >= start && d <= end; });
                 }
-                
                 return result;
             }, [bookings, searchTerm, filterPeriod]);
 
@@ -191,53 +167,60 @@
             }, [calc, selectedItem, discount, data]);
             const formatVND = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
-            // TÍNH TOÁN THỐNG KÊ (DỰA TRÊN DANH SÁCH ĐÃ LỌC)
             const stats = useMemo(() => {
-                let totalRev = 0;
-                let totalComm = 0;
-                const serviceMap = {};
-
+                let totalRev = 0; let totalComm = 0; const serviceMap = {};
                 filteredBookings.forEach(b => {
                     const rp = b.rawPrice !== undefined ? b.rawPrice : Number((b.price || '0').replace(/[^\d]/g, ''));
                     const comm = Number(b.commission || 0);
-                    
-                    totalRev += rp;
-                    totalComm += comm;
-
+                    totalRev += rp; totalComm += comm;
                     if (!serviceMap[b.service]) serviceMap[b.service] = { count: 0, revenue: 0 };
-                    serviceMap[b.service].count += 1;
-                    serviceMap[b.service].revenue += rp;
+                    serviceMap[b.service].count += 1; serviceMap[b.service].revenue += rp;
                 });
-
-                const sortedServices = Object.keys(serviceMap)
-                    .map(key => ({ name: key, ...serviceMap[key] }))
-                    .sort((a, b) => b.count - a.count);
-
+                const sortedServices = Object.keys(serviceMap).map(key => ({ name: key, ...serviceMap[key] })).sort((a, b) => b.count - a.count);
                 return { totalRev, totalComm, sortedServices };
             }, [filteredBookings]);
 
+            // KIỂM TRA MÃ GIẢM GIÁ (HỖ TRỢ MÃ 1 LẦN)
             const applyPromo = () => {
-                const promoValue = data?.pricing.promos[calc.code.toUpperCase().trim()];
-                if (promoValue) { setDiscount(promoValue); setIsPromoApplied(true); } 
+                const code = calc.code.toUpperCase().trim();
+                const promoData = data?.pricing.promos[code];
+                if (promoData !== undefined) { 
+                    if (typeof promoData === 'number') {
+                        setDiscount(promoData); 
+                        setIsPromoApplied(true);
+                    } else if (promoData.value) {
+                        setDiscount(promoData.value);
+                        setIsPromoApplied(true);
+                    }
+                } 
                 else { setDiscount(0); setIsPromoApplied(false); }
             };
 
             const sendTelegramNotification = async (bookingData) => {
                 if (!data.telegramConfig || !data.telegramConfig.active || !data.telegramConfig.botToken) return;
-                const message = `🚨 *CÓ KHÁCH ĐẶT LỊCH MỚI* 🚨\n\n👤 *Khách hàng:* ${bookingData.name}\n📞 *SĐT:* ${bookingData.phone}\n📅 *Ngày hẹn:* ${bookingData.date}\n⏰ *Giờ:* ${bookingData.time}\n🛠 *Dịch vụ:* ${bookingData.service}\n💰 *Dự toán:* ${bookingData.price}\n\n👉 Mở web để xem danh sách: https://dtellers.netlify.app`;
+                const message = `🚨 *CÓ KHÁCH ĐẶT LỊCH MỚI* 🚨\n\n👤 *Khách hàng:* ${bookingData.name}\n📞 *SĐT:* ${bookingData.phone}\n📅 *Ngày hẹn:* ${bookingData.date}\n⏰ *Giờ:* ${bookingData.time}\n🛠 *Dịch vụ:* ${bookingData.service}\n🏷 *Mã Ưu Đãi:* ${bookingData.promo || 'Không'}\n💰 *Dự toán:* ${bookingData.price}\n\n👉 Mở web để xem: https://dtellers.netlify.app`;
                 const url = `https://api.telegram.org/bot${data.telegramConfig.botToken}/sendMessage`;
                 try {
-                    await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ chat_id: data.telegramConfig.chatId, text: message, parse_mode: 'Markdown' })
-                    });
+                    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: data.telegramConfig.chatId, text: message, parse_mode: 'Markdown' }) });
                 } catch (error) { console.error("Lỗi gửi thông báo Telegram", error); }
             };
 
             const submitBooking = async (e) => {
                 e.preventDefault();
                 if (!db) { alert("⚠️ Tính năng đang offline. Cần cấu hình DB."); return; }
+                
+                const enteredCode = calc.code.toUpperCase().trim();
+                const promoData = data?.pricing.promos[enteredCode];
+
+                // KIỂM TRA ĐIỀU KIỆN MÃ 1 LẦN (NẾU CÓ)
+                if (promoData && typeof promoData === 'object' && promoData.singleUse) {
+                    const isUsed = bookings.some(b => b.phone === bookingForm.phone && b.promo === enteredCode);
+                    if (isUsed) {
+                        alert("⚠️ Lỗi: Số điện thoại này đã sử dụng mã giảm giá này trước đây!");
+                        return;
+                    }
+                }
+
                 const { collection, addDoc, doc, setDoc } = window.FirebaseSDK;
                 try {
                     const bookingData = {
@@ -246,6 +229,7 @@
                         service: selectedItem?.name || 'Tư vấn giải pháp',
                         price: formatVND(finalPrice),
                         rawPrice: finalPrice, 
+                        promo: enteredCode, // Lưu mã giảm giá đã xài
                         commission: 0, 
                         createdAt: new Date().toISOString()
                     };
@@ -275,9 +259,7 @@
             const updateCommission = async (id, value) => {
                 if (!db) return;
                 const { doc, updateDoc } = window.FirebaseSDK;
-                try {
-                    await updateDoc(doc(db, 'bookings', id), { commission: Number(value) || 0 });
-                } catch (e) { console.error("Lỗi cập nhật hoa hồng", e); }
+                try { await updateDoc(doc(db, 'bookings', id), { commission: Number(value) || 0 }); } catch (e) { console.error("Lỗi cập nhật hoa hồng", e); }
             };
 
             const deleteBooking = async (id) => {
@@ -286,17 +268,42 @@
                 await deleteDoc(doc(db, 'bookings', id));
             };
 
+            // HÀM LƯU CHỈNH SỬA ĐƠN HÀNG
+            const saveEditBooking = async (e) => {
+                e.preventDefault();
+                if (!db || !editModal) return;
+                const { doc, updateDoc } = window.FirebaseSDK;
+                try {
+                    // Update the rawPrice if the user changes the text price (basic extraction)
+                    let newRaw = editModal.rawPrice;
+                    const parsed = Number(String(editModal.price).replace(/[^\d]/g, ''));
+                    if (parsed > 0 && parsed !== newRaw) newRaw = parsed;
+
+                    await updateDoc(doc(db, 'bookings', editModal.id), {
+                        name: editModal.name,
+                        phone: editModal.phone,
+                        date: editModal.date,
+                        time: editModal.time,
+                        service: editModal.service,
+                        price: editModal.price,
+                        rawPrice: newRaw
+                    });
+                    setEditModal(null);
+                    alert("Cập nhật đơn hàng thành công!");
+                } catch (err) { alert("Lỗi khi cập nhật đơn hàng."); }
+            };
+
             if (globalError) return <div className="min-h-screen bg-slate-100 p-8 flex flex-col items-center justify-center text-center"><Icon name="alert-triangle" size={60} className="text-red-500 mb-6 drop-shadow-md" /><h1 className="text-2xl font-black text-slate-800 mb-3">LỖI TẢI DỮ LIỆU</h1><p className="text-red-600 font-bold text-sm">{globalError}</p></div>;
             if (!data) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-black animate-pulse uppercase tracking-widest text-xl">Đang tải hệ thống...</div>;
 
             const renderCalendar = () => {
                 const days = [];
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = now.getMonth();
+                const year = navDate.getFullYear();
+                const month = navDate.getMonth();
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
                 const firstDay = new Date(year, month, 1).getDay(); 
                 const emptyCells = firstDay === 0 ? 6 : firstDay - 1; 
+                const today = new Date();
 
                 const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
                 const headers = weekDays.map((d, i) => <div key={`head-${i}`} className={`text-center text-[10px] font-black pb-2 ${i >= 5 ? 'text-red-500' : 'text-slate-400'}`}>{d}</div>);
@@ -308,7 +315,9 @@
                     const st = availability[dStr]?.status || 'empty';
                     const dateObj = new Date(year, month, i);
                     const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-                    const isPast = dateObj < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    
+                    // Chỉ vô hiệu hóa quá khứ so với "ngày hôm nay", không phải tháng hiện tại
+                    const isPast = dateObj < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
                     let bgColor = 'bg-white border border-slate-100'; let textColor = isWeekend ? 'text-red-500' : 'text-slate-800'; let subText = 'Trống'; let subColor = 'text-green-500';
                     if (st === 'full') { bgColor = 'bg-red-500 text-white border-transparent'; textColor = 'text-white'; subText = 'Kín'; subColor = 'text-red-100'; } 
@@ -424,10 +433,31 @@
                     {(view === 'booking' || view === 'admin_calendar') && (
                         <div className="animate-in space-y-6">
                             <div className="bg-white rounded-[2.5rem] p-6 shadow-2xl border border-slate-50">
-                                <div className="flex justify-between items-center mb-6 px-1">
-                                    <h3 className="font-black uppercase tracking-[0.2em] text-xs text-slate-400">{isAdmin ? '⚙️ Chạm để đổi màu' : '📅 Chọn lịch thi công'}</h3>
-                                    <button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={16}/></button>
+                                
+                                {/* ĐIỀU HƯỚNG THÁNG CỦA LỊCH */}
+                                <div className="flex justify-between items-center mb-6">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setNavDate(new Date(navDate.getFullYear(), navDate.getMonth() - 1, 1))}
+                                        className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                                    >
+                                        <Icon name="chevron-left" size={18}/>
+                                    </button>
+                                    <h3 className="font-black uppercase tracking-[0.1em] text-[11px] text-slate-600">
+                                        Tháng {navDate.getMonth() + 1} / {navDate.getFullYear()}
+                                    </h3>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setNavDate(new Date(navDate.getFullYear(), navDate.getMonth() + 1, 1))}
+                                            className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                                        >
+                                            <Icon name="chevron-right" size={18}/>
+                                        </button>
+                                        <button onClick={() => setView('home')} className="p-2 bg-red-100 text-red-500 rounded-xl ml-2"><Icon name="x" size={16}/></button>
+                                    </div>
                                 </div>
+
                                 <div className="mb-6">{renderCalendar()}</div>
                                 
                                 {selectedDate && !isAdmin && (
@@ -516,13 +546,20 @@
                             </div>
                             
                             {filteredBookings.map(b => (
-                                <div key={b.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden animate-in mb-4">
+                                <div key={b.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden animate-in mb-4 group">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <h4 className="text-lg font-black tracking-tight leading-none mb-1">{b.name}</h4>
+                                            <h4 className="text-lg font-black tracking-tight leading-none mb-1 flex items-center gap-2">
+                                                {b.name}
+                                                {b.promo && <span className="text-[8px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full uppercase tracking-widest">{b.promo}</span>}
+                                            </h4>
                                             <p className="text-blue-600 font-bold text-xs uppercase tracking-widest">{b.phone}</p>
                                         </div>
-                                        <button onClick={() => deleteBooking(b.id)} className="p-2 text-slate-300 hover:text-red-500 bg-slate-50 rounded-xl"><Icon name="trash-2" size={18}/></button>
+                                        <div className="flex gap-1">
+                                            {/* NÚT CHỈNH SỬA MỚI THÊM VÀO */}
+                                            <button onClick={() => setEditModal(b)} className="p-2 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-xl transition-colors"><Icon name="edit" size={18}/></button>
+                                            <button onClick={() => deleteBooking(b.id)} className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 rounded-xl transition-colors"><Icon name="trash-2" size={18}/></button>
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 mb-3">
                                         <div className="bg-slate-50 p-3 rounded-2xl"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Thời gian</p><p className="text-[11px] font-bold">{b.date} • {b.time}</p></div>
@@ -547,6 +584,33 @@
                                 </div>
                             ))}
                             {filteredBookings.length === 0 && <p className="text-center text-slate-400 text-xs font-bold uppercase mt-10">Không tìm thấy đơn hàng nào</p>}
+                        </div>
+                    )}
+
+                    {/* MODAL CHỈNH SỬA ĐƠN HÀNG NỔI TRÊN MÀN HÌNH */}
+                    {editModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                            <form onSubmit={saveEditBooking} className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl relative overflow-hidden">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-black uppercase tracking-[0.1em] text-sm text-slate-800">✏️ CHỈNH SỬA ĐƠN HÀNG</h3>
+                                </div>
+
+                                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Tên khách hàng</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.name} onChange={e => setEditModal({...editModal, name: e.target.value})} /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Số điện thoại</label><input required type="tel" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.phone} onChange={e => setEditModal({...editModal, phone: e.target.value})} /></div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Ngày</label><input required type="date" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} /></div>
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Giờ</label><input required type="time" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} /></div>
+                                    </div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Dịch vụ (Tự nhập)</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 text-blue-600" value={editModal.service} onChange={e => setEditModal({...editModal, service: e.target.value})} /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Giá Tiền (VND)</label><input required type="text" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-black border border-slate-100 mt-1 text-slate-800" value={editModal.price} onChange={e => setEditModal({...editModal, price: e.target.value})} /></div>
+                                </div>
+
+                                <div className="flex gap-3 mt-6 pt-6 border-t border-slate-100">
+                                    <button type="button" onClick={() => setEditModal(null)} className="flex-1 bg-slate-100 text-slate-600 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-transform">Hủy bỏ</button>
+                                    <button type="submit" className="flex-1 bg-blue-600 text-white py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-transform shadow-lg shadow-blue-200">Lưu thay đổi</button>
+                                </div>
+                            </form>
                         </div>
                     )}
 
