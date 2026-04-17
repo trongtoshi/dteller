@@ -33,7 +33,6 @@
     <div id="root"></div>
 
     <script type="module">
-        // Bổ sung thêm hàm updateDoc để xử lý việc update hoa hồng
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, setDoc, collection, onSnapshot, query, addDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -72,6 +71,10 @@
             const [db, setDb] = useState(null);
             const [availability, setAvailability] = useState({});
             const [bookings, setBookings] = useState([]);
+            
+            // TRẠNG THÁI BỘ LỌC TÌM KIẾM
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterPeriod, setFilterPeriod] = useState('all'); // all, week, month, last_month
             
             const [selectedDate, setSelectedDate] = useState(null);
             const [bookingForm, setBookingForm] = useState({ name: '', phone: '', time: '09:00' });
@@ -126,6 +129,60 @@
                 } catch(e) { console.warn("Lỗi đọc Database:", e); }
             }, [db]);
 
+            // XỬ LÝ LỌC DANH SÁCH THEO TÊN, SĐT & THỜI GIAN
+            const filteredBookings = useMemo(() => {
+                let result = bookings;
+
+                // 1. Lọc theo Tên hoặc Số điện thoại
+                if (searchTerm.trim() !== '') {
+                    const term = searchTerm.toLowerCase();
+                    result = result.filter(b => 
+                        (b.name && b.name.toLowerCase().includes(term)) || 
+                        (b.phone && b.phone.includes(term))
+                    );
+                }
+
+                // 2. Lọc theo Thời gian (dựa trên ngày khách đặt lịch)
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+
+                if (filterPeriod === 'week') {
+                    const day = now.getDay() || 7;
+                    const start = new Date(now);
+                    start.setDate(now.getDate() - (day - 1));
+                    
+                    const end = new Date(start);
+                    end.setDate(end.getDate() + 6);
+                    end.setHours(23, 59, 59, 999);
+                    
+                    result = result.filter(b => {
+                        if (!b.date) return false;
+                        const d = new Date(b.date);
+                        return d >= start && d <= end;
+                    });
+                } else if (filterPeriod === 'month') {
+                    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+                    
+                    result = result.filter(b => {
+                        if (!b.date) return false;
+                        const d = new Date(b.date);
+                        return d >= start && d <= end;
+                    });
+                } else if (filterPeriod === 'last_month') {
+                    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+                    
+                    result = result.filter(b => {
+                        if (!b.date) return false;
+                        const d = new Date(b.date);
+                        return d >= start && d <= end;
+                    });
+                }
+                
+                return result;
+            }, [bookings, searchTerm, filterPeriod]);
+
             const selectedItem = useMemo(() => data?.pricing.items.find(i => i.id === calc.item), [calc.item, data]);
             const finalPrice = useMemo(() => {
                 if (!selectedItem || !data) return 0;
@@ -134,14 +191,13 @@
             }, [calc, selectedItem, discount, data]);
             const formatVND = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
-            // TÍNH TOÁN THỐNG KÊ (ANALYTICS)
+            // TÍNH TOÁN THỐNG KÊ (DỰA TRÊN DANH SÁCH ĐÃ LỌC)
             const stats = useMemo(() => {
                 let totalRev = 0;
                 let totalComm = 0;
                 const serviceMap = {};
 
-                bookings.forEach(b => {
-                    // Xử lý giá tiền (Lấy rawPrice nếu có, hoặc parse từ chuỗi price)
+                filteredBookings.forEach(b => {
                     const rp = b.rawPrice !== undefined ? b.rawPrice : Number((b.price || '0').replace(/[^\d]/g, ''));
                     const comm = Number(b.commission || 0);
                     
@@ -153,13 +209,12 @@
                     serviceMap[b.service].revenue += rp;
                 });
 
-                // Sắp xếp dịch vụ theo số lượng đơn giảm dần
                 const sortedServices = Object.keys(serviceMap)
                     .map(key => ({ name: key, ...serviceMap[key] }))
                     .sort((a, b) => b.count - a.count);
 
                 return { totalRev, totalComm, sortedServices };
-            }, [bookings]);
+            }, [filteredBookings]);
 
             const applyPromo = () => {
                 const promoValue = data?.pricing.promos[calc.code.toUpperCase().trim()];
@@ -190,8 +245,8 @@
                         date: selectedDate,
                         service: selectedItem?.name || 'Tư vấn giải pháp',
                         price: formatVND(finalPrice),
-                        rawPrice: finalPrice, // Lưu số thực để dễ thống kê
-                        commission: 0, // Mặc định hoa hồng là 0
+                        rawPrice: finalPrice, 
+                        commission: 0, 
                         createdAt: new Date().toISOString()
                     };
                     await addDoc(collection(db, 'bookings'), bookingData);
@@ -217,7 +272,6 @@
                 await setDoc(doc(db, 'availability', dateStr), { status: next });
             };
 
-            // Hàm Cập nhật Hoa hồng
             const updateCommission = async (id, value) => {
                 if (!db) return;
                 const { doc, updateDoc } = window.FirebaseSDK;
@@ -290,12 +344,39 @@
                         </p>
                     </header>
 
+                    {/* ADMIN MENU TABS */}
                     {isAdmin && (
-                        <div className="flex bg-slate-200/60 p-1.5 rounded-[1.2rem] mb-6 backdrop-blur-sm gap-1 shadow-inner">
+                        <div className="flex bg-slate-200/60 p-1.5 rounded-[1.2rem] mb-4 backdrop-blur-sm gap-1 shadow-inner">
                             <button onClick={() => setView('admin_calendar')} className={`flex-1 py-3 rounded-xl text-[9px] font-black tracking-widest ${view === 'admin_calendar' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>LỊCH</button>
                             <button onClick={() => setView('admin_dashboard')} className={`flex-1 py-3 rounded-xl text-[9px] font-black tracking-widest ${view === 'admin_dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>ĐƠN HÀNG</button>
                             <button onClick={() => setView('admin_stats')} className={`flex-1 py-3 rounded-xl text-[9px] font-black tracking-widest ${view === 'admin_stats' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>THỐNG KÊ</button>
                             <button onClick={() => {setIsAdmin(false); setView('home');}} className="px-3 text-red-500"><Icon name="power" size={16}/></button>
+                        </div>
+                    )}
+
+                    {/* BỘ LỌC TÌM KIẾM (Chỉ hiện trong Quản lý đơn và Thống kê) */}
+                    {isAdmin && (view === 'admin_dashboard' || view === 'admin_stats') && (
+                        <div className="flex gap-2 mb-6 animate-in">
+                            <div className="relative flex-[3]">
+                                <Icon name="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Tìm tên, SĐT..." 
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="w-full bg-white border border-slate-100 rounded-2xl pl-9 pr-3 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm placeholder:text-slate-300"
+                                />
+                            </div>
+                            <select 
+                                value={filterPeriod}
+                                onChange={e => setFilterPeriod(e.target.value)}
+                                className="flex-[2] bg-white border border-slate-100 rounded-2xl px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-600 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm appearance-none"
+                            >
+                                <option value="all">Toàn thời gian</option>
+                                <option value="week">Lịch Tuần này</option>
+                                <option value="month">Lịch Tháng này</option>
+                                <option value="last_month">Tháng trước</option>
+                            </select>
                         </div>
                     )}
 
@@ -427,13 +508,14 @@
                         </div>
                     )}
 
-                    {/* MÀN HÌNH DANH SÁCH ĐƠN HÀNG (THÊM Ô NHẬP HOA HỒNG) */}
+                    {/* MÀN HÌNH DANH SÁCH ĐƠN HÀNG */}
                     {view === 'admin_dashboard' && (
                         <div className="animate-in space-y-4 pb-10">
-                            <div className="flex justify-between items-center mb-6 px-1">
-                                <h3 className="font-black uppercase tracking-[0.2em] text-xs">📦 ĐƠN HÀNG ({bookings.length})</h3>
+                            <div className="flex justify-between items-center mb-2 px-1">
+                                <h3 className="font-black uppercase tracking-[0.2em] text-xs text-slate-400">📦 KẾT QUẢ: {filteredBookings.length} ĐƠN HÀNG</h3>
                             </div>
-                            {bookings.map(b => (
+                            
+                            {filteredBookings.map(b => (
                                 <div key={b.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden animate-in mb-4">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
@@ -448,7 +530,6 @@
                                     </div>
                                     <div className="bg-blue-50 p-3.5 rounded-2xl font-black text-[11px] leading-tight text-blue-900 mb-3">{b.service}</div>
                                     
-                                    {/* KHU VỰC NHẬP HOA HỒNG */}
                                     <div className="flex items-center justify-between bg-emerald-50/50 border border-emerald-100 p-3 rounded-2xl">
                                         <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
                                             <Icon name="dollar-sign" size={12}/> Hoa hồng
@@ -465,21 +546,23 @@
                                     <div className="absolute top-0 right-0 h-full w-1.5 bg-blue-500"></div>
                                 </div>
                             ))}
-                            {bookings.length === 0 && <p className="text-center text-slate-400 text-xs font-bold uppercase mt-10">Chưa có dữ liệu</p>}
+                            {filteredBookings.length === 0 && <p className="text-center text-slate-400 text-xs font-bold uppercase mt-10">Không tìm thấy đơn hàng nào</p>}
                         </div>
                     )}
 
                     {/* MÀN HÌNH THỐNG KÊ (ANALYTICS DASHBOARD) */}
                     {view === 'admin_stats' && (
                         <div className="animate-in space-y-4 pb-10">
-                            <div className="flex justify-between items-center mb-4 px-1">
-                                <h3 className="font-black uppercase tracking-[0.2em] text-xs">📊 BÁO CÁO KINH DOANH</h3>
+                            <div className="flex justify-between items-center mb-2 px-1">
+                                <h3 className="font-black uppercase tracking-[0.2em] text-xs text-slate-400">📊 BÁO CÁO KINH DOANH</h3>
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4 mb-6">
                                 <div className="col-span-2 bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-[2rem] text-white shadow-lg shadow-blue-200 relative overflow-hidden">
                                     <div className="relative z-10">
-                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">Tổng Doanh Thu Ước Tính</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">
+                                            {filterPeriod === 'all' ? 'Tổng Doanh Thu' : filterPeriod === 'week' ? 'Doanh Thu Tuần Này' : filterPeriod === 'month' ? 'Doanh Thu Tháng Này' : 'Doanh Thu Tháng Trước'}
+                                        </p>
                                         <h2 className="text-3xl font-black tracking-tight">{formatVND(stats.totalRev)}</h2>
                                     </div>
                                     <Icon name="trending-up" size={100} className="absolute -right-4 -bottom-4 opacity-10" />
@@ -494,11 +577,11 @@
                                 <div className="col-span-1 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-center">
                                     <div className="w-8 h-8 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3"><Icon name="users" size={14}/></div>
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Tổng Booking</p>
-                                    <p className="text-lg font-black text-purple-600">{bookings.length} <span className="text-[10px] text-slate-400 font-medium">đơn</span></p>
+                                    <p className="text-lg font-black text-purple-600">{filteredBookings.length} <span className="text-[10px] text-slate-400 font-medium">đơn</span></p>
                                 </div>
                             </div>
 
-                            <h3 className="font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 px-1 mt-6 mb-3">🔥 XẾP HẠNG DỊCH VỤ HOT</h3>
+                            <h3 className="font-black uppercase tracking-[0.2em] text-[10px] text-slate-400 px-1 mt-6 mb-3">🔥 DỊCH VỤ HOT ({filterPeriod === 'all' ? 'TOÀN BỘ' : 'TRONG KỲ'})</h3>
                             <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
                                 {stats.sortedServices.map((srv, index) => (
                                     <div key={index} className="p-4 border-b border-slate-50 flex items-center justify-between last:border-0 hover:bg-slate-50 transition-colors">
@@ -514,7 +597,7 @@
                                         </div>
                                     </div>
                                 ))}
-                                {stats.sortedServices.length === 0 && <p className="p-6 text-center text-xs text-slate-400 font-bold">Chưa có dữ liệu thống kê</p>}
+                                {stats.sortedServices.length === 0 && <p className="p-6 text-center text-xs text-slate-400 font-bold">Chưa có dữ liệu thống kê trong thời gian này</p>}
                             </div>
                         </div>
                     )}
