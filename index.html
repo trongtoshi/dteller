@@ -124,7 +124,13 @@
                     const unsubBook = onSnapshot(query(collection(db, 'bookings')), (snapshot) => {
                         const list = [];
                         snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-                        setBookings(list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+                        
+                        // CẬP NHẬT: Sắp xếp theo Ngày và Giờ hẹn khách đến (Ngày gần nhất lên trên cùng)
+                        setBookings(list.sort((a, b) => {
+                            const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : new Date(a.createdAt || 0).getTime();
+                            const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : new Date(b.createdAt || 0).getTime();
+                            return dateA - dateB;
+                        }));
                     });
 
                     return () => { unsubAvail(); unsubBook(); };
