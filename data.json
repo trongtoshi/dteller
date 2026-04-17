@@ -49,5 +49,10 @@
     "storageBucket": "dteller-e07c1.firebasestorage.app",
     "messagingSenderId": "34108264809",
     "appId": "1:34108264809:web:6a5dcc5a6cbf852a46edf8"
+  },
+  "telegramConfig": {
+    "active": true,
+    "botToken": "7428661070:AAG6v4HzvUpVh0wH7h1pUYdGKup6vDJrliw",
+    "chatId": "1047438952"
   }
 }
