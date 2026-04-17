@@ -341,7 +341,7 @@
                             <div className="bg-white rounded-[2.5rem] p-6 shadow-2xl border border-slate-50">
                                 <div className="flex justify-between items-center mb-6 px-1">
                                     <h3 className="font-black uppercase tracking-[0.2em] text-xs text-slate-400">{isAdmin ? '⚙️ Quản lý trạng thái' : '📅 Chọn lịch thi công'}</h3>
-                                    <button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={16}/></button>
+                                    <button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={24}/></button>
                                 </div>
                                 <div className="mb-6">{renderCalendar()}</div>
                                 
@@ -352,7 +352,7 @@
                                         <input required type="tel" placeholder="Số điện thoại liên hệ" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} />
                                         <div className="flex gap-2">
                                             <input type="time" required className="flex-1 bg-slate-50 p-4.5 rounded-2xl text-sm font-bold ring-1 ring-slate-100" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} />
-                                            <button type="submit" className="flex-[2] bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-xl shadow-blue-200">Xác nhận lịch</button>
+                                            <button type="submit" className="flex-[2] bg-blue-600 text-white font-black rounded-2xl uppercase text-[14px] tracking-widest shadow-xl shadow-blue-200">Xác nhận lịch</button>
                                         </div>
                                     </form>
                                 )}
@@ -468,10 +468,10 @@
                     {view !== 'success' && (
                         <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md flex gap-3 z-50">
                             <button type="button" onClick={() => setView('booking')} className="flex-[2.5] bg-blue-600 text-white rounded-[1.8rem] flex items-center justify-center gap-3 shadow-2xl py-4.5 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-blue-300">
-                                <Icon name="calendar" size={18} /> Đặt lịch thi công
+                                <Icon name="calendar" size={24} /> Đặt lịch thi công
                             </button>
                             <a href={`tel:${data.profile.phone}`} className="bg-white text-slate-900 border border-slate-200 rounded-[1.8rem] px-5 flex items-center justify-center shadow-xl active:scale-95 transition-all">
-                                <Icon name="phone-call" size={20} />
+                                <Icon name="phone-call" size={24} />
                             </a>
                         </footer>
                     )}
