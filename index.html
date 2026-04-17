@@ -66,19 +66,17 @@
 
         const App = () => {
             const [data, setData] = useState(null);
-            const [view, setView] = useState('home'); // home, calc, booking, success, admin_calendar, admin_dashboard
+            const [view, setView] = useState('home'); 
             const [calc, setCalc] = useState({ size: 'small', item: 'tint_car', code: '', area: 1 });
             const [discount, setDiscount] = useState(0);
             
-            // Database State
             const [db, setDb] = useState(null);
             const [availability, setAvailability] = useState({});
             const [bookings, setBookings] = useState([]);
             
-            // UI State
             const [selectedDate, setSelectedDate] = useState(null);
             const [bookingForm, setBookingForm] = useState({ name: '', phone: '', time: '09:00' });
-            const [recentBooking, setRecentBooking] = useState(null); // Lưu đơn vừa đặt để hiện Biên lai
+            const [recentBooking, setRecentBooking] = useState(null);
             const [isAdmin, setIsAdmin] = useState(false);
             const [isPromoApplied, setIsPromoApplied] = useState(false);
             const [globalError, setGlobalError] = useState(null);
@@ -143,7 +141,35 @@
                 else { setDiscount(0); setIsPromoApplied(false); }
             };
 
-            // LOGIC AUTO-BOOKING MỚI
+            // HÀM GỬI THÔNG BÁO QUA TELEGRAM
+            const sendTelegramNotification = async (bookingData) => {
+                if (!data.telegramConfig || !data.telegramConfig.active || !data.telegramConfig.botToken) return;
+                
+                const message = `🚨 *CÓ KHÁCH ĐẶT LỊCH MỚI* 🚨\n\n` +
+                                `👤 *Khách hàng:* ${bookingData.name}\n` +
+                                `📞 *SĐT:* ${bookingData.phone}\n` +
+                                `📅 *Ngày hẹn:* ${bookingData.date}\n` +
+                                `⏰ *Giờ:* ${bookingData.time}\n` +
+                                `🛠 *Dịch vụ:* ${bookingData.service}\n` +
+                                `💰 *Dự toán:* ${bookingData.price}\n\n` +
+                                `👉 Mở web để xem danh sách: https://dtellers.netlify.app`;
+
+                const url = `https://api.telegram.org/bot${data.telegramConfig.botToken}/sendMessage`;
+                try {
+                    await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: data.telegramConfig.chatId,
+                            text: message,
+                            parse_mode: 'Markdown'
+                        })
+                    });
+                } catch (error) {
+                    console.error("Lỗi gửi thông báo Telegram", error);
+                }
+            };
+
             const submitBooking = async (e) => {
                 e.preventDefault();
                 if (!db) {
@@ -152,7 +178,6 @@
                 }
                 const { collection, addDoc, doc, setDoc } = window.FirebaseSDK;
                 try {
-                    // 1. Lưu thông tin đơn hàng
                     const bookingData = {
                         ...bookingForm,
                         date: selectedDate,
@@ -162,12 +187,13 @@
                     };
                     await addDoc(collection(db, 'bookings'), bookingData);
 
-                    // 2. Auto-cập nhật lịch (Trống -> Vàng -> Đỏ)
                     const currentStatus = availability[selectedDate]?.status || 'empty';
                     const nextStatus = currentStatus === 'empty' ? 'half' : 'full';
                     await setDoc(doc(db, 'availability', selectedDate), { status: nextStatus });
 
-                    // 3. Hiển thị Biên lai
+                    // BẮN THÔNG BÁO TELEGRAM KHI LƯU ĐƠN THÀNH CÔNG
+                    sendTelegramNotification(bookingData);
+
                     setRecentBooking(bookingData);
                     setView('success');
                     setSelectedDate(null);
@@ -335,13 +361,12 @@
                         </div>
                     )}
 
-                    {/* MÀN HÌNH ĐẶT LỊCH */}
                     {(view === 'booking' || view === 'admin_calendar') && (
                         <div className="animate-in space-y-6">
                             <div className="bg-white rounded-[2.5rem] p-6 shadow-2xl border border-slate-50">
                                 <div className="flex justify-between items-center mb-6 px-1">
                                     <h3 className="font-black uppercase tracking-[0.2em] text-xs text-slate-400">{isAdmin ? '⚙️ Quản lý trạng thái' : '📅 Chọn lịch thi công'}</h3>
-                                    <button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={24}/></button>
+                                    <button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={16}/></button>
                                 </div>
                                 <div className="mb-6">{renderCalendar()}</div>
                                 
@@ -352,7 +377,7 @@
                                         <input required type="tel" placeholder="Số điện thoại liên hệ" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} />
                                         <div className="flex gap-2">
                                             <input type="time" required className="flex-1 bg-slate-50 p-4.5 rounded-2xl text-sm font-bold ring-1 ring-slate-100" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} />
-                                            <button type="submit" className="flex-[2] bg-blue-600 text-white font-black rounded-2xl uppercase text-[14px] tracking-widest shadow-xl shadow-blue-200">Xác nhận lịch</button>
+                                            <button type="submit" className="flex-[2] bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-xl shadow-blue-200">Xác nhận lịch</button>
                                         </div>
                                     </form>
                                 )}
@@ -360,7 +385,6 @@
                         </div>
                     )}
 
-                    {/* MÀN HÌNH TÍNH GIÁ */}
                     {view === 'calc' && (
                         <div className="bg-white rounded-[2.5rem] p-7 shadow-2xl animate-in space-y-6">
                             <div className="flex justify-between items-center mb-2"><h3 className="font-black uppercase tracking-widest text-xs">Dự toán chi phí</h3><button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={16}/></button></div>
@@ -398,20 +422,15 @@
                         </div>
                     )}
 
-                    {/* BIÊN LAI XÁC NHẬN (MÀN HÌNH MỚI DÀNH CHO KHÁCH) */}
                     {view === 'success' && recentBooking && (
                         <div className="animate-in">
                             <div className="bg-white rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden">
                                 <div className="bg-green-500 p-8 text-center text-white">
-                                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-                                        <Icon name="check" size={32} />
-                                    </div>
+                                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm"><Icon name="check" size={32} /></div>
                                     <h2 className="text-2xl font-black tracking-tight mb-1">ĐẶT LỊCH THÀNH CÔNG</h2>
-                                    <p className="text-xs opacity-80 uppercase tracking-widest font-bold">Vui lòng chụp màn hình lại</p>
+                                    <p className="text-xs opacity-80 uppercase tracking-widest font-bold">Tôi sẽ liên hệ để xác nhận</p>
                                 </div>
-                                
                                 <div className="receipt-cutout border-t-2 border-dashed border-slate-200"></div>
-                                
                                 <div className="p-8 space-y-6">
                                     <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Khách hàng</p><p className="font-black text-lg text-slate-800">{recentBooking.name}</p></div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -419,29 +438,18 @@
                                         <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Giờ</p><p className="font-black text-slate-800">{recentBooking.time}</p></div>
                                     </div>
                                     <div className="bg-slate-50 p-4 rounded-2xl">
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Dịch vụ</p>
-                                        <p className="font-black text-blue-600">{recentBooking.service}</p>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Dịch vụ</p><p className="font-black text-blue-600">{recentBooking.service}</p>
                                         <div className="h-px bg-slate-200 my-3"></div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Dự toán</span>
-                                            <span className="font-black text-lg">{recentBooking.price}</span>
-                                        </div>
+                                        <div className="flex justify-between items-center"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Dự toán</span><span className="font-black text-lg">{recentBooking.price}</span></div>
                                     </div>
-                                    
                                     <div className="space-y-3 pt-4">
-                                        <a href={data.profile.zalo} target="_blank" className="w-full bg-[#0068FF] text-white py-4.5 rounded-2xl font-black text-[11px] uppercase tracking-widest flex justify-center items-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-200">
-                                            <Icon name="send" size={16} /> Gửi chốt qua Zalo
-                                        </a>
-                                        <button onClick={() => setView('home')} className="w-full bg-slate-100 text-slate-600 py-4.5 rounded-2xl font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all">
-                                            Về trang chủ
-                                        </button>
+                                        <button onClick={() => setView('home')} className="w-full bg-slate-100 text-slate-600 py-4.5 rounded-2xl font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all">Về trang chủ</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* MÀN HÌNH QUẢN LÝ ĐƠN HÀNG CỦA ADMIN */}
                     {view === 'admin_dashboard' && (
                         <div className="animate-in space-y-4">
                             <div className="flex justify-between items-center mb-6 px-1">
@@ -468,10 +476,10 @@
                     {view !== 'success' && (
                         <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md flex gap-3 z-50">
                             <button type="button" onClick={() => setView('booking')} className="flex-[2.5] bg-blue-600 text-white rounded-[1.8rem] flex items-center justify-center gap-3 shadow-2xl py-4.5 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-blue-300">
-                                <Icon name="calendar" size={24} /> Đặt lịch thi công
+                                <Icon name="calendar" size={18} /> Đặt lịch thi công
                             </button>
                             <a href={`tel:${data.profile.phone}`} className="bg-white text-slate-900 border border-slate-200 rounded-[1.8rem] px-5 flex items-center justify-center shadow-xl active:scale-95 transition-all">
-                                <Icon name="phone-call" size={24} />
+                                <Icon name="phone-call" size={20} />
                             </a>
                         </footer>
                     )}
