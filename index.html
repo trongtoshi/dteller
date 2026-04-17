@@ -25,7 +25,6 @@
 <body>
     <div id="root"></div>
 
-    <!-- Tải bộ thư viện Firebase của Google -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, setDoc, collection, onSnapshot, query, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -37,7 +36,27 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useMemo, useEffect } = React;
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // Vỏ bọc bọc thép cho Icon (Chống sập React)
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const containerRef = useRef(null);
+
+            useEffect(() => {
+                if (window.lucide && containerRef.current) {
+                    containerRef.current.innerHTML = ''; // Dọn dẹp an toàn
+                    const i = document.createElement('i');
+                    i.setAttribute('data-lucide', name);
+                    if (className) i.className = className;
+                    i.style.width = size + 'px';
+                    i.style.height = size + 'px';
+                    containerRef.current.appendChild(i);
+                    window.lucide.createIcons({ root: containerRef.current }); // Giới hạn khu vực render
+                }
+            }, [name, size, className]);
+
+            return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
+        };
 
         const App = () => {
             const [data, setData] = useState(null);
@@ -57,34 +76,29 @@
             const [isPromoApplied, setIsPromoApplied] = useState(false);
             const [globalError, setGlobalError] = useState(null);
 
-            const Icon = ({ name, size = 20, className = "" }) => {
-                useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name, className]);
-                return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
-            };
-
             // 1. Tải Dữ Liệu & Khởi tạo Database
             useEffect(() => {
                 const loadSystem = async () => {
                     try {
                         const res = await fetch(`data.json?t=${Date.now()}`);
-                        if (!res.ok) throw new Error("Không tìm thấy file data.json trên GitHub.");
+                        if (!res.ok) throw new Error("Không tìm thấy file data.json trên máy chủ.");
                         
                         const text = await res.text();
                         let json;
                         try {
                             json = JSON.parse(text);
                         } catch(e) {
-                            throw new Error("File data.json bị sai cú pháp. Có thể ông đã copy nhầm dấu bằng (=) hoặc quên dấu ngoặc kép ở đoạn cấu hình Firebase.");
+                            throw new Error("File data.json bị sai cú pháp. Vui lòng kiểm tra lại các dấu ngoặc kép và dấu phẩy.");
                         }
                         
                         setData(json);
 
-                        // Nếu có cấu hình Firebase chuẩn, tiến hành kết nối
-                        if (json.firebaseConfig && json.firebaseConfig.apiKey && window.FirebaseSDK) {
+                        // Khởi tạo Firebase an toàn
+                        const fbConfig = json.firebaseConfig;
+                        if (fbConfig && fbConfig.apiKey && fbConfig.apiKey.length > 10 && fbConfig.apiKey !== "ĐIỀN_API_KEY_CỦA_ÔNG_VÀO_ĐÂY" && window.FirebaseSDK) {
                             try {
                                 const { initializeApp, getFirestore, getAuth, signInAnonymously } = window.FirebaseSDK;
-                                // Tránh khởi tạo nhiều lần
-                                const app = window._firebaseApp || initializeApp(json.firebaseConfig);
+                                const app = window._firebaseApp || initializeApp(fbConfig);
                                 window._firebaseApp = app;
                                 
                                 const firestore = getFirestore(app);
@@ -92,8 +106,7 @@
                                 setDb(firestore);
                                 await signInAnonymously(auth);
                             } catch(err) {
-                                console.error("Lỗi Firebase:", err);
-                                // Bỏ qua lỗi Firebase để web vẫn hiển thị giao diện tính toán
+                                console.error("Lỗi khởi tạo Firebase:", err);
                             }
                         }
                     } catch (e) {
@@ -123,7 +136,7 @@
 
                     return () => { unsubAvail(); unsubBook(); };
                 } catch(e) {
-                    console.warn("Lỗi đọc Database (Chưa cấp quyền Firestore Rules):", e);
+                    console.warn("Lỗi đọc Database:", e);
                 }
             }, [db]);
 
@@ -153,7 +166,7 @@
             const submitBooking = async (e) => {
                 e.preventDefault();
                 if (!db) {
-                    alert("⚠️ Tính năng này cần Database. Ông hãy thêm đoạn cấu hình firebaseConfig vào file data.json nhé!");
+                    alert("⚠️ Tính năng này đang offline. Vui lòng cấu hình firebaseConfig trong data.json để lưu đơn hàng.");
                     return;
                 }
                 const { collection, addDoc } = window.FirebaseSDK;
@@ -167,12 +180,13 @@
                     });
                     setView('home');
                     setSelectedDate(null);
+                    setBookingForm({ name: '', phone: '', time: '09:00' });
                     alert("🎉 Đặt lịch thành công! Tôi sẽ liên hệ với ông ngay.");
-                } catch (e) { alert("Lỗi kết nối. Có thể Firestore Database của ông chưa được mở (Test Mode)."); }
+                } catch (e) { alert("Lỗi kết nối CSDL. Hãy kiểm tra lại Rule của Firestore."); }
             };
 
             const toggleDayStatus = async (dateStr) => {
-                if (!db) { alert("Cần Cấu hình Firebase để đổi trạng thái lịch."); return; }
+                if (!db) { alert("Cần cấu hình Firebase để đổi trạng thái lịch."); return; }
                 const current = availability[dateStr]?.status || 'empty';
                 const next = current === 'empty' ? 'half' : current === 'half' ? 'full' : 'empty';
                 const { doc, setDoc } = window.FirebaseSDK;
@@ -185,19 +199,13 @@
                 await deleteDoc(doc(db, 'bookings', id));
             };
 
-            // --- KIỂM TRA LỖI TRẮNG TRANG ---
+            // --- KIỂM TRA LỖI ---
             if (globalError) {
                 return (
                     <div className="min-h-screen bg-slate-100 p-8 flex flex-col items-center justify-center text-center">
                         <Icon name="alert-triangle" size={60} className="text-red-500 mb-6 drop-shadow-md" />
                         <h1 className="text-2xl font-black text-slate-800 mb-3">LỖI TẢI DỮ LIỆU</h1>
                         <p className="text-red-600 font-bold mb-6 text-sm">{globalError}</p>
-                        <div className="bg-white p-6 rounded-2xl border shadow-sm text-left text-xs font-medium text-slate-600 space-y-2">
-                            <p><b>Cách khắc phục:</b></p>
-                            <p>1. Mở file <code>data.json</code> trên GitHub.</p>
-                            <p>2. Xóa các đoạn thừa như `const firebaseConfig =`</p>
-                            <p>3. Đảm bảo mọi tên thuộc tính (như "apiKey") đều nằm trong ngoặc kép.</p>
-                        </div>
                     </div>
                 );
             }
@@ -296,7 +304,7 @@
                                     if (s.id === 'fb') iconName = 'facebook';
                                     if (s.id === 'shopping-bag' || s.id === 'shopee') iconName = 'shopping-bag';
                                     return (
-                                        <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer" className={`${s.color} text-white p-4 rounded-[1.3rem] shadow-xl active:scale-90 transition-all`}>
+                                        <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer" className={`${s.color} text-white p-4 rounded-[1.3rem] shadow-xl active:scale-90 transition-all flex items-center justify-center`}>
                                             <Icon name={iconName} size={22} />
                                         </a>
                                     );
