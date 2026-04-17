@@ -72,10 +72,9 @@
             const [availability, setAvailability] = useState({});
             const [bookings, setBookings] = useState([]);
             
-            // TRẠNG THÁI BỘ LỌC TÌM KIẾM & LỊCH XUYÊN THỜI GIAN
             const [searchTerm, setSearchTerm] = useState('');
             const [filterPeriod, setFilterPeriod] = useState('all'); 
-            const [navDate, setNavDate] = useState(new Date()); // Biến điều hướng tháng cho Lịch
+            const [navDate, setNavDate] = useState(new Date()); 
             
             const [selectedDate, setSelectedDate] = useState(null);
             const [bookingForm, setBookingForm] = useState({ name: '', phone: '', time: '09:00' });
@@ -84,7 +83,6 @@
             const [isPromoApplied, setIsPromoApplied] = useState(false);
             const [globalError, setGlobalError] = useState(null);
 
-            // TRẠNG THÁI MODAL CHỈNH SỬA ĐƠN HÀNG
             const [editModal, setEditModal] = useState(null);
 
             useEffect(() => {
@@ -180,7 +178,6 @@
                 return { totalRev, totalComm, sortedServices };
             }, [filteredBookings]);
 
-            // KIỂM TRA MÃ GIẢM GIÁ (HỖ TRỢ MÃ 1 LẦN)
             const applyPromo = () => {
                 const code = calc.code.toUpperCase().trim();
                 const promoData = data?.pricing.promos[code];
@@ -212,7 +209,6 @@
                 const enteredCode = calc.code.toUpperCase().trim();
                 const promoData = data?.pricing.promos[enteredCode];
 
-                // KIỂM TRA ĐIỀU KIỆN MÃ 1 LẦN (NẾU CÓ)
                 if (promoData && typeof promoData === 'object' && promoData.singleUse) {
                     const isUsed = bookings.some(b => b.phone === bookingForm.phone && b.promo === enteredCode);
                     if (isUsed) {
@@ -229,7 +225,7 @@
                         service: selectedItem?.name || 'Tư vấn giải pháp',
                         price: formatVND(finalPrice),
                         rawPrice: finalPrice, 
-                        promo: enteredCode, // Lưu mã giảm giá đã xài
+                        promo: enteredCode, 
                         commission: 0, 
                         createdAt: new Date().toISOString()
                     };
@@ -268,17 +264,22 @@
                 await deleteDoc(doc(db, 'bookings', id));
             };
 
-            // HÀM LƯU CHỈNH SỬA ĐƠN HÀNG
+            // HÀM LƯU CHỈNH SỬA ĐƠN HÀNG (CẬP NHẬT ĐỒNG BỘ LỊCH)
             const saveEditBooking = async (e) => {
                 e.preventDefault();
                 if (!db || !editModal) return;
-                const { doc, updateDoc } = window.FirebaseSDK;
+                const { doc, updateDoc, setDoc } = window.FirebaseSDK;
                 try {
-                    // Update the rawPrice if the user changes the text price (basic extraction)
+                    // Lấy dữ liệu cũ trước khi update
+                    const originalBooking = bookings.find(b => b.id === editModal.id);
+                    const oldDate = originalBooking?.date;
+                    const newDate = editModal.date;
+
                     let newRaw = editModal.rawPrice;
                     const parsed = Number(String(editModal.price).replace(/[^\d]/g, ''));
                     if (parsed > 0 && parsed !== newRaw) newRaw = parsed;
 
+                    // 1. Cập nhật thông tin đơn hàng
                     await updateDoc(doc(db, 'bookings', editModal.id), {
                         name: editModal.name,
                         phone: editModal.phone,
@@ -288,8 +289,26 @@
                         price: editModal.price,
                         rawPrice: newRaw
                     });
+
+                    // 2. Đồng bộ trạng thái Lịch nếu khách đổi ngày
+                    if (oldDate && newDate && oldDate !== newDate) {
+                        // Nhả ngày cũ
+                        const oldStatus = availability[oldDate]?.status || 'empty';
+                        let nextOldStatus = 'empty';
+                        if (oldStatus === 'full') nextOldStatus = 'half';
+                        else if (oldStatus === 'half') nextOldStatus = 'empty';
+                        await setDoc(doc(db, 'availability', oldDate), { status: nextOldStatus });
+
+                        // Lấp ngày mới
+                        const newStatus = availability[newDate]?.status || 'empty';
+                        let nextNewStatus = 'full';
+                        if (newStatus === 'empty') nextNewStatus = 'half';
+                        else if (newStatus === 'half') nextNewStatus = 'full';
+                        await setDoc(doc(db, 'availability', newDate), { status: nextNewStatus });
+                    }
+
                     setEditModal(null);
-                    alert("Cập nhật đơn hàng thành công!");
+                    alert("Cập nhật đơn hàng và Đồng bộ lịch thành công!");
                 } catch (err) { alert("Lỗi khi cập nhật đơn hàng."); }
             };
 
@@ -316,7 +335,6 @@
                     const dateObj = new Date(year, month, i);
                     const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
                     
-                    // Chỉ vô hiệu hóa quá khứ so với "ngày hôm nay", không phải tháng hiện tại
                     const isPast = dateObj < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
                     let bgColor = 'bg-white border border-slate-100'; let textColor = isWeekend ? 'text-red-500' : 'text-slate-800'; let subText = 'Trống'; let subColor = 'text-green-500';
@@ -353,7 +371,6 @@
                         </p>
                     </header>
 
-                    {/* ADMIN MENU TABS */}
                     {isAdmin && (
                         <div className="flex bg-slate-200/60 p-1.5 rounded-[1.2rem] mb-4 backdrop-blur-sm gap-1 shadow-inner">
                             <button onClick={() => setView('admin_calendar')} className={`flex-1 py-3 rounded-xl text-[9px] font-black tracking-widest ${view === 'admin_calendar' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>LỊCH</button>
@@ -363,7 +380,6 @@
                         </div>
                     )}
 
-                    {/* BỘ LỌC TÌM KIẾM (Chỉ hiện trong Quản lý đơn và Thống kê) */}
                     {isAdmin && (view === 'admin_dashboard' || view === 'admin_stats') && (
                         <div className="flex gap-2 mb-6 animate-in">
                             <div className="relative flex-[3]">
@@ -429,12 +445,10 @@
                         </div>
                     )}
 
-                    {/* LỊCH ADMIN / KHÁCH */}
                     {(view === 'booking' || view === 'admin_calendar') && (
                         <div className="animate-in space-y-6">
                             <div className="bg-white rounded-[2.5rem] p-6 shadow-2xl border border-slate-50">
                                 
-                                {/* ĐIỀU HƯỚNG THÁNG CỦA LỊCH */}
                                 <div className="flex justify-between items-center mb-6">
                                     <button 
                                         type="button" 
@@ -538,7 +552,6 @@
                         </div>
                     )}
 
-                    {/* MÀN HÌNH DANH SÁCH ĐƠN HÀNG */}
                     {view === 'admin_dashboard' && (
                         <div className="animate-in space-y-4 pb-10">
                             <div className="flex justify-between items-center mb-2 px-1">
@@ -556,7 +569,6 @@
                                             <p className="text-blue-600 font-bold text-xs uppercase tracking-widest">{b.phone}</p>
                                         </div>
                                         <div className="flex gap-1">
-                                            {/* NÚT CHỈNH SỬA MỚI THÊM VÀO */}
                                             <button onClick={() => setEditModal(b)} className="p-2 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-xl transition-colors"><Icon name="edit" size={18}/></button>
                                             <button onClick={() => deleteBooking(b.id)} className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 rounded-xl transition-colors"><Icon name="trash-2" size={18}/></button>
                                         </div>
@@ -596,14 +608,30 @@
                                 </div>
 
                                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Tên khách hàng</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.name} onChange={e => setEditModal({...editModal, name: e.target.value})} /></div>
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Số điện thoại</label><input required type="tel" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.phone} onChange={e => setEditModal({...editModal, phone: e.target.value})} /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Tên khách hàng</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.name} onChange={e => setEditModal({...editModal, name: e.target.value})} /></div>
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Số điện thoại</label><input required type="tel" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.phone} onChange={e => setEditModal({...editModal, phone: e.target.value})} /></div>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Ngày</label><input required type="date" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} /></div>
-                                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Giờ</label><input required type="time" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} /></div>
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Ngày</label><input required type="date" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} /></div>
+                                        <div><label className="text-[10px] font-black text-slate-400 uppercase">Giờ</label><input required type="time" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} /></div>
                                     </div>
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Dịch vụ (Tự nhập)</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 text-blue-600" value={editModal.service} onChange={e => setEditModal({...editModal, service: e.target.value})} /></div>
-                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Giá Tiền (VND)</label><input required type="text" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-black border border-slate-100 mt-1 text-slate-800" value={editModal.price} onChange={e => setEditModal({...editModal, price: e.target.value})} /></div>
+                                    
+                                    {/* CẬP NHẬT: SELECT DROPDOWN ĐỂ CHỌN CHUẨN DỊCH VỤ TỪ DATA */}
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase">Dịch vụ</label>
+                                        <select 
+                                            required 
+                                            className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 text-blue-600 outline-none focus:ring-2 focus:ring-blue-500" 
+                                            value={editModal.service} 
+                                            onChange={e => setEditModal({...editModal, service: e.target.value})}
+                                        >
+                                            <option value="" disabled>Chọn dịch vụ</option>
+                                            {data.pricing.items.map(i => (
+                                                <option key={i.id} value={i.name}>{i.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Giá Tiền (VND)</label><input required type="text" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-black border border-slate-100 mt-1 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.price} onChange={e => setEditModal({...editModal, price: e.target.value})} /></div>
                                 </div>
 
                                 <div className="flex gap-3 mt-6 pt-6 border-t border-slate-100">
@@ -614,7 +642,6 @@
                         </div>
                     )}
 
-                    {/* MÀN HÌNH THỐNG KÊ (ANALYTICS DASHBOARD) */}
                     {view === 'admin_stats' && (
                         <div className="animate-in space-y-4 pb-10">
                             <div className="flex justify-between items-center mb-2 px-1">
