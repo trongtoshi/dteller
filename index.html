@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>D TELLER | Expert Hub & Booking</title>
+    <title>D TELLER | Car Hub & Booking</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -15,9 +15,8 @@
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #0f172a; }
         .bento-item { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .bento-item:active { transform: scale(0.96); }
-        .animate-in { animation: slideUp 0.4s ease-out forwards; }
+        .animate-in { animation: slideUp 0.3s ease-out forwards; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .pulse-red { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
@@ -41,22 +40,9 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // Firebase config safety check
-        let fbConfig = {};
-        try {
-            fbConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "" };
-        } catch (e) { console.warn("Firebase config not found or invalid"); }
-        
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'dteller-hub-v1';
-
-        const Icon = ({ name, size = 20, className = "" }) => {
-            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name, className]);
-            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
-        };
-
         const App = () => {
             const [data, setData] = useState(null);
-            const [view, setView] = useState('home'); // home, calc, booking, admin_calendar, admin_dashboard
+            const [view, setView] = useState('home'); 
             const [calc, setCalc] = useState({ size: 'small', item: 'tint_car', code: '', area: 1 });
             const [discount, setDiscount] = useState(0);
             const [db, setDb] = useState(null);
@@ -68,27 +54,12 @@
             const [isAdmin, setIsAdmin] = useState(false);
             const [isPromoApplied, setIsPromoApplied] = useState(false);
 
-            // 1. Init Firebase
-            useEffect(() => {
-                const initFirebase = async () => {
-                    if (!window.FirebaseSDK || !fbConfig.apiKey) return;
-                    const { initializeApp, getFirestore, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } = window.FirebaseSDK;
-                    const app = initializeApp(fbConfig);
-                    const firestore = getFirestore(app);
-                    const auth = getAuth(app);
-                    setDb(firestore);
+            const Icon = ({ name, size = 20, className = "" }) => {
+                useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name, className]);
+                return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+            };
 
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                    onAuthStateChanged(auth, setUser);
-                };
-                initFirebase();
-            }, []);
-
-            // 2. Fetch data.json from GitHub (with Cache Busting)
+            // 1. Fetch data.json
             useEffect(() => {
                 fetch(`data.json?t=${Date.now()}`)
                     .then(res => res.json())
@@ -96,10 +67,25 @@
                     .catch(e => console.error("Data error", e));
             }, []);
 
+            // 2. Init Firebase from data.json config
+            useEffect(() => {
+                if (!data || !data.firebaseConfig || !data.firebaseConfig.apiKey) return;
+                try {
+                    const { initializeApp, getFirestore, getAuth, signInAnonymously, onAuthStateChanged } = window.FirebaseSDK;
+                    const app = initializeApp(data.firebaseConfig);
+                    const firestore = getFirestore(app);
+                    const auth = getAuth(app);
+                    setDb(firestore);
+                    signInAnonymously(auth);
+                    onAuthStateChanged(auth, setUser);
+                } catch (e) { console.error("Firebase Init Error:", e); }
+            }, [data]);
+
             // 3. Listen to Real-time data
             useEffect(() => {
                 if (!db || !user) return;
                 const { collection, onSnapshot, query } = window.FirebaseSDK;
+                const appId = 'dteller-system';
                 
                 const unsubAvail = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'availability')), (snapshot) => {
                     const dict = {};
@@ -141,10 +127,15 @@
 
             const submitBooking = async (e) => {
                 e.preventDefault();
-                if (!db || !selectedDate) return;
+                if (!db) {
+                    alert("⚠️ Chức năng lưu trữ cần Database. Vui lòng thêm Cấu hình Firebase vào file data.json để tính năng Đặt lịch hoạt động trên Netlify.");
+                    return;
+                }
+                if (!selectedDate) return;
+                
                 const { collection, addDoc } = window.FirebaseSDK;
                 try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'bookings'), {
+                    await addDoc(collection(db, 'artifacts', 'dteller-system', 'public', 'data', 'bookings'), {
                         ...bookingForm,
                         date: selectedDate,
                         service: selectedItem?.name || 'Dịch vụ lẻ',
@@ -153,50 +144,113 @@
                     });
                     setView('home');
                     setSelectedDate(null);
-                    alert("Đặt lịch thành công! Tôi sẽ liên hệ với ông.");
-                } catch (e) { alert("Lỗi gửi đơn."); }
+                    alert("🎉 Đặt lịch thành công! Tôi sẽ liên hệ với ông ngay.");
+                } catch (e) { alert("Lỗi gửi đơn. Vui lòng thử lại."); }
             };
 
             const toggleDayStatus = async (dateStr) => {
+                if (!db) {
+                    alert("Cần Cấu hình Firebase để đổi trạng thái lịch.");
+                    return;
+                }
                 const current = availability[dateStr]?.status || 'empty';
                 const next = current === 'empty' ? 'half' : current === 'half' ? 'full' : 'empty';
                 const { doc, setDoc } = window.FirebaseSDK;
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'availability', dateStr), { status: next });
+                await setDoc(doc(db, 'artifacts', 'dteller-system', 'public', 'data', 'availability', dateStr), { status: next });
             };
 
             if (!data) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white font-black text-2xl animate-pulse italic">D TELLER...</div>;
 
+            // RENDER LỊCH CHUYÊN NGHIỆP CÓ NGÀY CUỐI TUẦN
             const renderCalendar = () => {
                 const days = [];
                 const now = new Date();
-                const total = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-                for (let i = 1; i <= total; i++) {
-                    const dStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const firstDay = new Date(year, month, 1).getDay(); 
+                const emptyCells = firstDay === 0 ? 6 : firstDay - 1; // Align to Monday (T2)
+
+                // Render Headers (T2 -> CN)
+                const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+                const headers = weekDays.map((d, i) => (
+                    <div key={`head-${i}`} className={`text-center text-[10px] font-black pb-2 ${i >= 5 ? 'text-red-400' : 'text-slate-400'}`}>{d}</div>
+                ));
+
+                // Empty slots for alignment
+                for (let i = 0; i < emptyCells; i++) days.push(<div key={`empty-${i}`} className="h-14"></div>);
+
+                // Render Dates
+                for (let i = 1; i <= daysInMonth; i++) {
+                    const dStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
                     const st = availability[dStr]?.status || 'empty';
-                    const color = st === 'full' ? 'bg-red-500 text-white' : st === 'half' ? 'bg-yellow-400 text-slate-900' : 'bg-green-500 text-white';
+                    const dateObj = new Date(year, month, i);
+                    const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                    const isPast = dateObj < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                    let bgColor = 'bg-white border border-slate-100';
+                    let textColor = isWeekend ? 'text-red-500' : 'text-slate-700';
+                    let subText = 'Trống';
+                    let subColor = 'text-green-500';
+
+                    if (st === 'full') {
+                        bgColor = 'bg-red-500 text-white border-transparent';
+                        textColor = 'text-white';
+                        subText = 'Kín';
+                        subColor = 'text-red-100';
+                    } else if (st === 'half') {
+                        bgColor = 'bg-yellow-400 text-slate-900 border-transparent';
+                        textColor = 'text-slate-900';
+                        subText = 'Nửa';
+                        subColor = 'text-yellow-800';
+                    }
+
+                    if (isPast && st === 'empty' && !isAdmin) {
+                        bgColor = 'bg-slate-50 opacity-50 cursor-not-allowed';
+                        textColor = 'text-slate-400';
+                        subText = '-';
+                        subColor = 'text-slate-300';
+                    }
+
                     days.push(
-                        <button key={i} onClick={() => isAdmin ? toggleDayStatus(dStr) : (st !== 'full' && setSelectedDate(dStr))} className={`h-14 rounded-xl flex flex-col items-center justify-center shadow-sm active:scale-90 transition-all ${color} ${selectedDate === dStr ? 'ring-4 ring-blue-600' : ''}`}>
-                            <span className="text-sm font-black">{i}</span>
-                            <span className="text-[7px] font-bold uppercase opacity-60 mt-1">{st==='full'?'Full':st==='half'?'Nửa':'Trống'}</span>
+                        <button 
+                            key={i} 
+                            type="button"
+                            disabled={isPast && !isAdmin && st !== 'full'}
+                            onClick={() => {
+                                if (isAdmin) toggleDayStatus(dStr);
+                                else if (st !== 'full' && !isPast) setSelectedDate(dStr);
+                            }} 
+                            className={`h-14 rounded-xl flex flex-col items-center justify-center shadow-sm transition-all ${bgColor} ${selectedDate === dStr ? 'ring-4 ring-blue-600 scale-105 z-10' : 'active:scale-90'}`}
+                        >
+                            <span className={`text-sm font-black ${textColor}`}>{i}</span>
+                            <span className={`text-[7px] font-bold uppercase mt-1 ${subColor}`}>{subText}</span>
                         </button>
                     );
                 }
-                return days;
+
+                return (
+                    <div className="w-full">
+                        <div className="grid grid-cols-7 gap-1 mb-2">{headers}</div>
+                        <div className="grid grid-cols-7 gap-1">{days}</div>
+                    </div>
+                );
             };
 
             return (
                 <div className="max-w-md mx-auto min-h-screen px-4 pt-8 pb-32 animate-in">
                     
-                    {/* Header: Click 5 lần vào Title để mở Admin Dashboard */}
                     <header className="flex flex-col items-center mb-10 text-center">
                         <div className="relative mb-6 group">
                             <div className="absolute inset-0 bg-blue-500 blur-3xl opacity-10 rounded-full"></div>
-                            <img src={data.profile.avatar} className="relative w-24 h-24 rounded-[2.5rem] border-4 border-white shadow-2xl bg-white p-2 object-cover" />
+                            <div className="relative w-24 h-24 rounded-[2.5rem] border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center p-1">
+                                <img src={data.profile.avatar} className="w-full h-full object-contain rounded-[2rem]" onError={(e)=>{e.target.src="https://api.dicebear.com/7.x/initials/svg?seed=DT"}} />
+                            </div>
                             <div className="absolute bottom-1 right-1 bg-green-500 w-5 h-5 rounded-full border-4 border-white shadow-sm"></div>
                         </div>
                         <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                            {data.profile.name}
-                            <Icon name="check-circle" size={18} className="text-blue-500 fill-blue-500/10" />
+                            {data.profile.name} <Icon name="check-circle" size={18} className="text-blue-500 fill-blue-500/10" />
                         </h1>
                         <p onClick={() => { window._clickCount = (window._clickCount || 0) + 1; if(window._clickCount >= 5) { setIsAdmin(true); setView('admin_dashboard'); window._clickCount = 0; }}} className="text-blue-600 font-bold text-[10px] uppercase tracking-[0.2em] mt-1 select-none">
                             {isAdmin ? 'QUẢN TRỊ VIÊN' : data.profile.title}
@@ -204,7 +258,6 @@
                         <p className="text-slate-500 text-sm max-w-[300px] leading-relaxed font-medium italic mt-3">"{data.profile.bio}"</p>
                     </header>
 
-                    {/* Main Nav (Admin only) */}
                     {isAdmin && (
                         <div className="flex bg-slate-200/50 p-1.5 rounded-2xl mb-8 backdrop-blur-sm">
                             <button onClick={() => setView('admin_calendar')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-black tracking-widest ${view === 'admin_calendar' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>LỊCH TRỐNG</button>
@@ -213,20 +266,23 @@
                         </div>
                     )}
 
-                    {/* Home View */}
                     {view === 'home' && (
                         <div className="grid grid-cols-2 gap-4 animate-in">
-                            {/* SOCIALS */}
                             <div className="col-span-2 flex justify-center gap-4 mb-6">
-                                {data.socials.map(s => (
-                                    <a key={s.id} href={s.url} target="_blank" className={`${s.color} text-white p-4 rounded-[1.3rem] shadow-xl active:scale-90 transition-all flex items-center justify-center`}>
-                                        <Icon name={s.id === 'tiktok' ? 'video' : s.id === 'fb' ? 'facebook' : 'shopping-bag'} size={22} />
-                                    </a>
-                                ))}
+                                {data.socials.map(s => {
+                                    let iconName = 'link';
+                                    if (s.id === 'tiktok') iconName = 'video';
+                                    if (s.id === 'fb') iconName = 'facebook';
+                                    if (s.id === 'shopping-bag' || s.id === 'shopee') iconName = 'shopping-bag';
+                                    return (
+                                        <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer" className={`${s.color} text-white p-4 rounded-[1.3rem] shadow-xl active:scale-90 transition-all flex items-center justify-center`}>
+                                            <Icon name={iconName} size={22} />
+                                        </a>
+                                    );
+                                })}
                             </div>
 
-                            {/* HOT DEAL */}
-                            <a href={data.hotDeal.link} target="_blank" className="col-span-2 bg-[#1e293b] rounded-[2.5rem] p-8 text-white relative overflow-hidden bento-item border border-white/5 shadow-2xl">
+                            <a href={data.hotDeal.link} target="_blank" className="col-span-2 bg-[#1e293b] rounded-[2.5rem] p-8 text-white relative overflow-hidden bento-item shadow-2xl">
                                 <div className="flex justify-between items-center mb-6">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_#3b82f6]"></div>
@@ -234,12 +290,10 @@
                                     </div>
                                     <span className="bg-[#ef4444] text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider pulse-red shadow-lg shadow-red-500/20">{data.hotDeal.badge}</span>
                                 </div>
-                                <h2 className="text-2xl font-extrabold leading-tight mb-6 tracking-tight uppercase">{data.hotDeal.title}</h2>
+                                <h2 className="text-2xl font-extrabold leading-tight mb-6 uppercase">{data.hotDeal.title}</h2>
                                 <div className="flex items-center gap-4 mb-8">
                                     <span className="text-4xl font-black">{data.hotDeal.price}</span>
-                                    <div className="bg-red-500/20 px-2.5 py-1 rounded-md text-center flex items-center">
-                                        <span className="text-xs text-[#ef4444] line-through font-bold">{data.hotDeal.oldPrice}</span>
-                                    </div>
+                                    <div className="bg-red-500/20 px-2.5 py-1 rounded-md text-center"><span className="text-xs text-[#ef4444] line-through font-bold">{data.hotDeal.oldPrice}</span></div>
                                 </div>
                                 <div className="bg-[#facc15] rounded-3xl p-5 flex items-center gap-4 shadow-xl">
                                     <div className="bg-[#0f172a] p-2.5 rounded-xl text-[#facc15] flex-shrink-0"><Icon name="gift" size={24} /></div>
@@ -248,41 +302,39 @@
                                 <Icon name="zap" size={180} className="absolute -right-12 -bottom-12 opacity-[0.03] text-white rotate-12" />
                             </a>
 
-                            {/* CALCULATOR TOGGLE (Vừa được khôi phục) */}
-                            <button onClick={() => setView('calc')} className="col-span-2 rounded-[2.2rem] bg-white p-6 flex items-center justify-between border border-slate-100 shadow-sm bento-item">
+                            <button type="button" onClick={() => setView('calc')} className="col-span-2 rounded-[2.2rem] bg-white p-6 flex items-center justify-between shadow-sm border border-slate-100 bento-item">
                                 <div className="flex items-center gap-4">
                                     <div className="bg-blue-50 p-3.5 rounded-2xl text-blue-600"><Icon name="calculator" /></div>
                                     <div className="text-left">
-                                        <h4 className="text-[15px] font-extrabold tracking-tight">Dự toán chi phí nhanh</h4>
+                                        <h4 className="text-[15px] font-extrabold tracking-tight text-slate-900">Dự toán chi phí nhanh</h4>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tự động tính theo phân khúc</p>
                                     </div>
                                 </div>
-                                <Icon name="chevron-right" size={18} opacity={0.5} />
+                                <Icon name="chevron-right" size={18} className="text-slate-300" />
                             </button>
 
-                            {/* SERVICES GRID */}
                             {data.services.map(s => (
                                 <a key={s.id} href={s.url} target="_blank" className={`${s.size === 'large' ? 'col-span-2' : 'col-span-1'} bg-white rounded-[2.2rem] p-6 border border-slate-100 shadow-sm flex flex-col justify-between bento-item min-h-[145px]`}>
                                     <div className={`${s.color} w-11 h-11 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg`}><Icon name={s.icon} size={22} /></div>
-                                    <h4 className="text-[13px] font-extrabold leading-tight tracking-tight">{s.title}</h4>
+                                    <h4 className="text-[13px] font-extrabold leading-tight tracking-tight text-slate-800">{s.title}</h4>
                                 </a>
                             ))}
                         </div>
                     )}
 
-                    {/* Booking View */}
                     {(view === 'booking' || view === 'admin_calendar') && (
                         <div className="animate-in space-y-6">
                             <div className="bg-white rounded-[2.5rem] p-6 shadow-2xl border border-slate-50">
                                 <div className="flex justify-between items-center mb-6 px-1">
-                                    <h3 className="font-black uppercase tracking-[0.2em] text-xs text-slate-400">{isAdmin ? '⚙️ Quản lý trạng thái lịch' : '📅 Chọn ngày thi công'}</h3>
+                                    <h3 className="font-black uppercase tracking-[0.2em] text-xs text-slate-400">{isAdmin ? '⚙️ Quản lý lịch' : '📅 Chọn ngày thi công'}</h3>
                                     <button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={16}/></button>
                                 </div>
-                                <div className="calendar-grid mb-8">{renderCalendar()}</div>
+                                <div className="mb-6">{renderCalendar()}</div>
+                                
                                 {selectedDate && !isAdmin && (
                                     <form onSubmit={submitBooking} className="space-y-4 pt-8 border-t border-slate-100 animate-in">
-                                        <div className="text-center mb-6"><span className="bg-blue-50 text-blue-600 px-4 py-2 rounded-full font-black text-xs uppercase tracking-widest leading-none">NGÀY HẸN: {selectedDate}</span></div>
-                                        <input required placeholder="Họ và tên của ông" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.name} onChange={e => setBookingForm({...bookingForm, name: e.target.value})} />
+                                        <div className="text-center mb-6"><span className="bg-blue-50 text-blue-600 px-4 py-2 rounded-full font-black text-xs uppercase tracking-widest leading-none shadow-sm">NGÀY HẸN: {selectedDate}</span></div>
+                                        <input required placeholder="Họ và tên khách hàng" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.name} onChange={e => setBookingForm({...bookingForm, name: e.target.value})} />
                                         <input required type="tel" placeholder="Số điện thoại liên hệ" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} />
                                         <div className="flex gap-2">
                                             <input type="time" className="flex-1 bg-slate-50 p-4.5 rounded-2xl text-sm font-bold ring-1 ring-slate-100" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} />
@@ -294,28 +346,26 @@
                         </div>
                     )}
 
-                    {/* Calculator View (Bổ sung phần khuyến mãi) */}
                     {view === 'calc' && (
                         <div className="bg-white rounded-[2.5rem] p-7 shadow-2xl animate-in space-y-6">
-                            <div className="flex justify-between items-center mb-2"><h3 className="font-black uppercase tracking-widest text-xs">Dự toán & Ưu đãi</h3><button onClick={() => setView('home')} className="p-2"><Icon name="x"/></button></div>
+                            <div className="flex justify-between items-center mb-2"><h3 className="font-black uppercase tracking-widest text-xs">Dự toán & Ưu đãi</h3><button onClick={() => setView('home')} className="p-2 bg-slate-100 rounded-full"><Icon name="x" size={16}/></button></div>
                             <select className="w-full bg-slate-50 p-4.5 rounded-2xl font-bold outline-none ring-1 ring-slate-100" value={calc.item} onChange={e => setCalc({...calc, item: e.target.value})}>
                                 {data.pricing.items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                             </select>
                             {selectedItem?.type === 'car' ? (
                                 <div className="grid grid-cols-1 gap-2.5">
                                     {data.pricing.carSizes.map(sz => (
-                                        <button key={sz.id} onClick={() => setCalc({...calc, size: sz.id})} className={`p-4 rounded-2xl text-[11px] font-black border-2 transition-all ${calc.size === sz.id ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-sm' : 'border-transparent bg-slate-50 text-slate-400'}`}>{sz.name}</button>
+                                        <button key={sz.id} type="button" onClick={() => setCalc({...calc, size: sz.id})} className={`p-4 rounded-2xl text-[11px] font-black border-2 transition-all ${calc.size === sz.id ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-sm' : 'border-transparent bg-slate-50 text-slate-400'}`}>{sz.name}</button>
                                     ))}
                                 </div>
                             ) : (
                                 <div className="relative"><input type="number" className="w-full bg-slate-50 p-4.5 rounded-2xl text-xl font-black text-center ring-1 ring-slate-100 outline-none" value={calc.area} onChange={e => setCalc({...calc, area: e.target.value})} /><span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300 uppercase text-[10px] tracking-widest">{selectedItem?.type === 'house' ? 'm²' : 'Clip'}</span></div>
                             )}
 
-                            {/* KHU VỰC NHẬP MÃ KHUYẾN MÃI (Vừa được khôi phục) */}
                             <div>
                                 <div className="flex gap-2.5">
                                     <input placeholder="MÃ GIẢM GIÁ" className="flex-1 bg-slate-50 rounded-2xl px-5 text-[10px] font-black uppercase outline-none ring-1 ring-slate-100" value={calc.code} onChange={e => { setCalc({...calc, code: e.target.value}); if (discount > 0) setDiscount(0); }} />
-                                    <button onClick={applyPromo} className="bg-slate-900 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-black/10 active:scale-95 transition-transform">Dùng</button>
+                                    <button type="button" onClick={applyPromo} className="bg-slate-900 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-black/10 active:scale-95 transition-transform">Dùng</button>
                                 </div>
                                 {isPromoApplied && <p className="text-green-600 text-[10px] font-black text-center mt-3 uppercase tracking-widest flex items-center justify-center gap-1 animate-in"><Icon name="check" size={12} /> Áp dụng mã thành công (Giảm {discount*100}%)</p>}
                             </div>
@@ -324,14 +374,17 @@
                                 <div className="relative z-10">
                                     <p className="text-[11px] font-black opacity-70 uppercase mb-2 tracking-[0.2em]">Giá dự toán dự kiến</p>
                                     <h3 className="text-4xl font-black mb-6 leading-tight tracking-tight">{formatVND(finalPrice)}</h3>
-                                    <button onClick={() => setView('booking')} className="w-full bg-white text-blue-600 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">Đặt lịch ngay</button>
+                                    
+                                    {/* FIX: NÚT TIẾN HÀNH ĐẶT LỊCH ĐÃ ĐƯỢC CHỈNH LẠI CHUẨN */}
+                                    <button type="button" onClick={() => setView('booking')} className="w-full bg-white text-blue-600 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+                                        Tiến hành đặt lịch ngay
+                                    </button>
                                 </div>
                                 <Icon name="calculator" size={140} className="absolute -right-8 -bottom-8 opacity-10 rotate-12" />
                             </div>
                         </div>
                     )}
 
-                    {/* Admin Orders Dashboard */}
                     {view === 'admin_dashboard' && (
                         <div className="animate-in space-y-4">
                             <div className="flex justify-between items-center mb-6 px-1">
@@ -354,9 +407,8 @@
                         </div>
                     )}
 
-                    {/* Footer Contact */}
                     <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md flex gap-3 z-50">
-                        <button onClick={() => setView('booking')} className="flex-[2.5] bg-blue-600 text-white rounded-[1.8rem] flex items-center justify-center gap-3 shadow-2xl py-4.5 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-blue-300">
+                        <button type="button" onClick={() => setView('booking')} className="flex-[2.5] bg-blue-600 text-white rounded-[1.8rem] flex items-center justify-center gap-3 shadow-2xl py-4.5 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-blue-300">
                             <Icon name="calendar" size={18} /> Đặt lịch thi công
                         </button>
                         <a href={`tel:${data.profile.phone}`} className="bg-white text-slate-900 border border-slate-200 rounded-[1.8rem] px-5 flex items-center justify-center shadow-xl active:scale-95 transition-all">
