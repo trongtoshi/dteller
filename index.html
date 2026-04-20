@@ -77,7 +77,9 @@
             const [navDate, setNavDate] = useState(new Date()); 
             
             const [selectedDate, setSelectedDate] = useState(null);
-            const [bookingForm, setBookingForm] = useState({ name: '', phone: '', time: '09:00' });
+            
+            // CẬP NHẬT: Thêm address và notes vào form
+            const [bookingForm, setBookingForm] = useState({ name: '', phone: '', address: '', notes: '', time: '09:00' });
             const [recentBooking, setRecentBooking] = useState(null);
             const [isAdmin, setIsAdmin] = useState(false);
             const [isPromoApplied, setIsPromoApplied] = useState(false);
@@ -125,7 +127,6 @@
                         const list = [];
                         snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
                         
-                        // CẬP NHẬT: Sắp xếp theo Ngày và Giờ hẹn khách đến (Ngày gần nhất lên trên cùng)
                         setBookings(list.sort((a, b) => {
                             const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}`).getTime() : new Date(a.createdAt || 0).getTime();
                             const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}`).getTime() : new Date(b.createdAt || 0).getTime();
@@ -201,7 +202,18 @@
 
             const sendTelegramNotification = async (bookingData) => {
                 if (!data.telegramConfig || !data.telegramConfig.active || !data.telegramConfig.botToken) return;
-                const message = `🚨 *CÓ KHÁCH ĐẶT LỊCH MỚI* 🚨\n\n👤 *Khách hàng:* ${bookingData.name}\n📞 *SĐT:* ${bookingData.phone}\n📅 *Ngày hẹn:* ${bookingData.date}\n⏰ *Giờ:* ${bookingData.time}\n🛠 *Dịch vụ:* ${bookingData.service}\n🏷 *Mã Ưu Đãi:* ${bookingData.promo || 'Không'}\n💰 *Dự toán:* ${bookingData.price}\n\n👉 Mở web để xem: https://dtellers.netlify.app`;
+                // CẬP NHẬT: Thêm địa chỉ và ghi chú vào Telegram
+                const message = `🚨 *CÓ KHÁCH ĐẶT LỊCH MỚI* 🚨\n\n` +
+                                `👤 *Khách hàng:* ${bookingData.name}\n` +
+                                `📞 *SĐT:* ${bookingData.phone}\n` +
+                                `📍 *Địa chỉ:* ${bookingData.address || 'Không nhập'}\n` +
+                                `📅 *Ngày hẹn:* ${bookingData.date}\n` +
+                                `⏰ *Giờ:* ${bookingData.time}\n` +
+                                `🛠 *Dịch vụ:* ${bookingData.service}\n` +
+                                `📝 *Ghi chú:* ${bookingData.notes || 'Không có'}\n` +
+                                `🏷 *Mã Ưu Đãi:* ${bookingData.promo || 'Không'}\n` +
+                                `💰 *Dự toán:* ${bookingData.price}\n\n` +
+                                `👉 Mở web để xem: https://dtellers.netlify.app`;
                 const url = `https://api.telegram.org/bot${data.telegramConfig.botToken}/sendMessage`;
                 try {
                     await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: data.telegramConfig.chatId, text: message, parse_mode: 'Markdown' }) });
@@ -246,7 +258,8 @@
                     setRecentBooking(bookingData);
                     setView('success');
                     setSelectedDate(null);
-                    setBookingForm({ name: '', phone: '', time: '09:00' });
+                    // CẬP NHẬT: Xóa trắng form sau khi gửi
+                    setBookingForm({ name: '', phone: '', address: '', notes: '', time: '09:00' });
                 } catch (e) { alert("Lỗi kết nối CSDL."); }
             };
 
@@ -270,21 +283,18 @@
                 await deleteDoc(doc(db, 'bookings', id));
             };
 
-            // HÀM LƯU CHỈNH SỬA ĐƠN HÀNG (CẬP NHẬT ĐỒNG BỘ LỊCH)
             const saveEditBooking = async (e) => {
                 e.preventDefault();
                 if (!db || !editModal) return;
                 const { doc, updateDoc, setDoc } = window.FirebaseSDK;
                 try {
-                    // Lấy dữ liệu cũ trước khi update
                     const originalBooking = bookings.find(b => b.id === editModal.id);
                     const oldDate = originalBooking?.date;
                     const newDate = editModal.date;
 
-                    // CẢNH BÁO NẾU ĐỔI SANG NGÀY KÍN LỊCH
                     if (oldDate !== newDate && availability[newDate]?.status === 'full') {
                         if (!window.confirm(`⚠️ Ngày ${newDate} hiện đã KÍN LỊCH.\nBạn có chắc chắn muốn chèn thêm đơn vào ngày này không?`)) {
-                            return; // Dừng lại nếu không đồng ý
+                            return; 
                         }
                     }
 
@@ -292,13 +302,14 @@
                     const parsed = Number(String(editModal.price).replace(/\D/g, ''));
                     if (!isNaN(parsed) && parsed > 0) newRaw = parsed;
 
-                    // Định dạng lại giá tiền chuẩn có ₫ để lưu vào Database
                     const formattedPrice = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(newRaw);
 
-                    // 1. Cập nhật thông tin đơn hàng
+                    // CẬP NHẬT: Lưu địa chỉ và ghi chú khi sửa
                     await updateDoc(doc(db, 'bookings', editModal.id), {
                         name: editModal.name,
                         phone: editModal.phone,
+                        address: editModal.address || '',
+                        notes: editModal.notes || '',
                         date: editModal.date,
                         time: editModal.time,
                         service: editModal.service,
@@ -306,16 +317,13 @@
                         rawPrice: newRaw
                     });
 
-                    // 2. Đồng bộ trạng thái Lịch nếu khách đổi ngày
                     if (oldDate && newDate && oldDate !== newDate) {
-                        // Nhả ngày cũ
                         const oldStatus = availability[oldDate]?.status || 'empty';
                         let nextOldStatus = 'empty';
                         if (oldStatus === 'full') nextOldStatus = 'half';
                         else if (oldStatus === 'half') nextOldStatus = 'empty';
                         await setDoc(doc(db, 'availability', oldDate), { status: nextOldStatus });
 
-                        // Lấp ngày mới
                         const newStatus = availability[newDate]?.status || 'empty';
                         let nextNewStatus = 'full';
                         if (newStatus === 'empty') nextNewStatus = 'half';
@@ -324,7 +332,7 @@
                     }
 
                     setEditModal(null);
-                    alert("Cập nhật đơn hàng và Đồng bộ lịch thành công!");
+                    alert("Cập nhật đơn hàng thành công!");
                 } catch (err) { alert("Lỗi khi cập nhật đơn hàng."); }
             };
 
@@ -494,12 +502,18 @@
                                     {selectedDate && !isAdmin && (
                                         <form onSubmit={submitBooking} className="space-y-4 pt-8 border-t border-slate-100 animate-in">
                                             <div className="text-center mb-6"><span className="bg-blue-50 text-blue-600 px-4 py-2 rounded-full font-black text-xs uppercase tracking-widest leading-none shadow-sm">NGÀY HẸN: {selectedDate}</span></div>
+                                            
+                                            {/* CẬP NHẬT: Thêm input Địa chỉ và Ghi chú */}
                                             <input required placeholder="Họ và tên khách hàng" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.name} onChange={e => setBookingForm({...bookingForm, name: e.target.value})} />
                                             <input required type="tel" placeholder="Số điện thoại liên hệ" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} />
+                                            <input required type="text" placeholder="Địa chỉ thi công (Số nhà, Đường...)" className="w-full bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500" value={bookingForm.address} onChange={e => setBookingForm({...bookingForm, address: e.target.value})} />
+                                            
                                             <div className="flex gap-2">
-                                                <input type="time" required className="flex-1 bg-slate-50 p-4.5 rounded-2xl text-sm font-bold ring-1 ring-slate-100" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} />
-                                                <button type="submit" className="flex-[2] bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-xl shadow-blue-200">Xác nhận lịch</button>
+                                                <input type="time" required className="flex-[1.5] bg-slate-50 p-4.5 rounded-2xl text-sm font-bold ring-1 ring-slate-100" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} />
+                                                <textarea placeholder="Ghi chú thêm (Tùy chọn)" className="flex-[3] bg-slate-50 p-4.5 rounded-2xl text-sm font-bold outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-blue-500 resize-none h-14" value={bookingForm.notes} onChange={e => setBookingForm({...bookingForm, notes: e.target.value})} />
                                             </div>
+                                            
+                                            <button type="submit" className="w-full bg-blue-600 text-white font-black rounded-2xl uppercase text-[11px] tracking-widest shadow-xl shadow-blue-200 py-4.5 mt-2">Xác nhận lịch hẹn</button>
                                         </form>
                                     )}
                                 </div>
@@ -558,8 +572,18 @@
                                             <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ngày hẹn</p><p className="font-black text-slate-800">{recentBooking.date}</p></div>
                                             <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Giờ</p><p className="font-black text-slate-800">{recentBooking.time}</p></div>
                                         </div>
+                                        
                                         <div className="bg-slate-50 p-4 rounded-2xl">
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Dịch vụ</p><p className="font-black text-blue-600">{recentBooking.service}</p>
+                                            
+                                            {/* Hiện địa chỉ trong biên lai thành công */}
+                                            {recentBooking.address && (
+                                                <div className="mt-3 pt-3 border-t border-slate-200">
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Thi công tại</p>
+                                                    <p className="text-xs font-bold text-slate-700 leading-tight">{recentBooking.address}</p>
+                                                </div>
+                                            )}
+                                            
                                             <div className="h-px bg-slate-200 my-3"></div>
                                             <div className="flex justify-between items-center"><span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Dự toán</span><span className="font-black text-lg">{recentBooking.price}</span></div>
                                         </div>
@@ -590,11 +614,27 @@
                                                 <button onClick={() => deleteBooking(b.id)} className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 rounded-xl transition-colors"><Icon name="trash-2" size={18}/></button>
                                             </div>
                                         </div>
+                                        
                                         <div className="grid grid-cols-2 gap-3 mb-3">
                                             <div className="bg-slate-50 p-3 rounded-2xl"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Thời gian</p><p className="text-[11px] font-bold">{b.date} • {b.time}</p></div>
                                             <div className="bg-slate-50 p-3 rounded-2xl"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Dự toán</p><p className="text-[11px] font-bold text-blue-600">{b.price}</p></div>
                                         </div>
+
                                         <div className="bg-blue-50 p-3.5 rounded-2xl font-black text-[11px] leading-tight text-blue-900 mb-3">{b.service}</div>
+                                        
+                                        {/* CẬP NHẬT: Hiển thị Địa chỉ & Ghi chú trên thẻ đơn hàng */}
+                                        <div className="bg-slate-50 p-3.5 rounded-2xl mb-3 space-y-2 border border-slate-100">
+                                            <div>
+                                                <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5 flex items-center gap-1"><Icon name="map-pin" size={10}/> Địa chỉ thi công</p>
+                                                <p className="text-[11px] font-bold text-slate-700 leading-snug">{b.address || 'Chưa cung cấp'}</p>
+                                            </div>
+                                            {b.notes && (
+                                                <div className="pt-2 border-t border-slate-200/60">
+                                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5 flex items-center gap-1"><Icon name="file-text" size={10}/> Ghi chú</p>
+                                                    <p className="text-[11px] font-medium text-slate-600 italic leading-snug">{b.notes}</p>
+                                                </div>
+                                            )}
+                                        </div>
                                         
                                         <div className="flex items-center justify-between bg-emerald-50/50 border border-emerald-100 p-3 rounded-2xl">
                                             <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
@@ -679,7 +719,6 @@
                         )}
                     </div>
 
-                    {/* MODAL CHỈNH SỬA ĐƠN HÀNG - ĐÃ ĐƯỢC CHUYỂN RA NGOÀI VÀ CỐ ĐỊNH VỊ TRÍ */}
                     {editModal && (
                         <div className="fixed inset-0 bg-slate-900/80 z-[999] flex items-center justify-center p-4 backdrop-blur-sm">
                             <form onSubmit={saveEditBooking} className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl relative overflow-hidden animate-in">
@@ -687,9 +726,13 @@
                                     <h3 className="font-black uppercase tracking-[0.1em] text-sm text-slate-800">✏️ CHỈNH SỬA ĐƠN HÀNG</h3>
                                 </div>
 
-                                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase">Tên khách hàng</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.name} onChange={e => setEditModal({...editModal, name: e.target.value})} /></div>
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase">Số điện thoại</label><input required type="tel" className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.phone} onChange={e => setEditModal({...editModal, phone: e.target.value})} /></div>
+                                    
+                                    {/* CẬP NHẬT: Thêm Input Địa chỉ & Ghi chú vào form Edit */}
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Địa chỉ thi công</label><input required className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={editModal.address || ''} onChange={e => setEditModal({...editModal, address: e.target.value})} /></div>
+                                    
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[10px] font-black text-slate-400 uppercase">Ngày</label>
@@ -735,6 +778,8 @@
                                             <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-slate-400 mt-0.5">₫</span>
                                         </div>
                                     </div>
+
+                                    <div><label className="text-[10px] font-black text-slate-400 uppercase">Ghi chú thêm</label><textarea className="w-full bg-slate-50 p-3 rounded-xl text-sm font-bold border border-slate-100 mt-1 outline-none focus:ring-2 focus:ring-blue-500 resize-none" rows="2" value={editModal.notes || ''} onChange={e => setEditModal({...editModal, notes: e.target.value})} /></div>
                                 </div>
 
                                 <div className="flex gap-3 mt-6 pt-6 border-t border-slate-100">
